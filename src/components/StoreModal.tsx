@@ -269,8 +269,8 @@ const STORE_ITEMS: StoreItem[] = [
   },
   {
     id: 'store-booster-music',
-    name: 'Retro Synth Arcade Soundtrack 🎶',
-    description: 'Unlocks custom retro 8-bit chiptune background tracks in audio synthesizer.',
+    name: 'VIP Music Lounge Access Pass 🎶',
+    description: 'Unlocks exclusive VIP background tracks in the Penguin Beats Music Lounge.',
     price: 15,
     category: 'booster',
     icon: '🎶',

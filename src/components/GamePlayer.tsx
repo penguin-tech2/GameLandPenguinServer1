@@ -21,6 +21,7 @@ import { formatPlayCount } from '../data/gamesData';
 import { PenguinMascot } from './PenguinMascot';
 import { LeaderboardSection } from './LeaderboardSection';
 import { GameFeedbackModal } from './GameFeedbackModal';
+import { MusicLoungePlayer } from './MusicLoungePlayer';
 import { UserAccount, getCurrentSessionUser } from '../utils/auth';
 import { recordGameLaunch, addPlaytimeMinutes } from '../utils/trophies';
 
@@ -71,6 +72,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
     return () => clearInterval(interval);
   }, [game.id, effectiveUser?.username]);
+
+  // Turn off loading for native components like Music Lounge
+  useEffect(() => {
+    if (game.id === 'penguin-music-lounge') {
+      setIsLoading(false);
+      setShowFocusBanner(false);
+    }
+  }, [game.id]);
 
   // Focus the iframe to ensure WASD / Arrow keys & mouse pointer lock work properly
   const handleFocusIframe = () => {
@@ -254,7 +263,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           </div>
         )}
 
-        {game.embedType === 'srcDoc' && game.srcDocContent ? (
+        {game.id === 'penguin-music-lounge' ? (
+          <div className="w-full h-full min-h-[580px] p-2 sm:p-4 bg-slate-950">
+            <MusicLoungePlayer />
+          </div>
+        ) : game.embedType === 'srcDoc' && game.srcDocContent ? (
           <iframe
             ref={iframeRef}
             key={key}

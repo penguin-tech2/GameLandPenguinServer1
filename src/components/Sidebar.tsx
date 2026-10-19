@@ -8,6 +8,7 @@ import {
   Puzzle,
   Trophy,
   Car,
+  Headphones,
   Compass,
   Heart,
   Globe,
@@ -58,6 +59,7 @@ const CATEGORY_ITEMS: { name: CategoryType; icon: React.ReactNode; color: string
   { name: 'Racing', icon: <Car className="w-4 h-4" />, color: 'text-rose-400' },
   { name: 'Strategy', icon: <Swords className="w-4 h-4" />, color: 'text-blue-400' },
   { name: 'Retro', icon: <Gamepad2 className="w-4 h-4" />, color: 'text-fuchsia-400' },
+  { name: 'Music', icon: <Headphones className="w-4 h-4" />, color: 'text-pink-400' },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({

@@ -1141,7 +1141,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                      <span>Cyber Polar Synthwave BGM Loop & Audio EQ</span>
+                      <span>Skyline Champions VIP Track & Audio EQ</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
@@ -1181,7 +1181,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                      <span>Emperor Diamond Royal Anthem Chiptune Track</span>
+                      <span>Pebbles Polar Royal VIP Lounge Anthem</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />

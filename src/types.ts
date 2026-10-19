@@ -7,7 +7,8 @@ export type CategoryType =
   | 'Racing'
   | 'Strategy'
   | 'Retro'
-  | 'Proxies';
+  | 'Proxies'
+  | 'Music';
 
 export interface GameControl {
   key: string;
