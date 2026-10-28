@@ -661,10 +661,20 @@ export default function App() {
             </button>
             <button
               onClick={() => {
+                setTermsModalTab('rules');
+                setIsTermsModalOpen(true);
+              }}
+              className="text-amber-400 hover:text-amber-300 font-bold transition-colors flex items-center gap-1 cursor-pointer"
+              id="footer-rules-btn"
+            >
+              <span>Community Rules</span>
+            </button>
+            <button
+              onClick={() => {
                 setTermsModalTab('terms');
                 setIsTermsModalOpen(true);
               }}
-              className="text-cyan-400 hover:text-cyan-300 font-bold transition-colors flex items-center gap-1"
+              className="text-cyan-400 hover:text-cyan-300 font-bold transition-colors flex items-center gap-1 cursor-pointer"
               id="footer-terms-btn"
             >
               <span>Terms of Service</span>

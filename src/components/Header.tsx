@@ -186,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
               id="header-terms-btn"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Terms</span>
+              <span className="hidden sm:inline">Terms & Rules</span>
             </button>
           )}
 

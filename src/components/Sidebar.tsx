@@ -342,7 +342,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <div className="flex items-center gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
-                <span>Terms of Service</span>
+                <span>Terms & Community Rules</span>
               </div>
             </button>
           )}
