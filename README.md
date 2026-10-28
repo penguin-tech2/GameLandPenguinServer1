@@ -5,8 +5,9 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.0-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Socket.io](https://img.shields.io/badge/Socket.io-4.8-010101?style=for-the-badge&logo=socket.io&logoColor=white)](https://socket.io/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-A responsive, feature-packed online arcade and unblocked gaming portal hosted by **Ishaan Y**. Features an extensive collection of retro and browser mini-games, real-time multiplayer lobbies, student-friendly stealth panic keys, user accounts, customizable avatars, and a fish coins reward economy.
+A responsive, feature-packed online arcade and unblocked gaming portal hosted by **Ishaan Y**. Features an extensive collection of retro and browser mini-games, real-time multiplayer lobbies, student-friendly game experiences, and a vibrant penguin-themed game economy.
 
 ---
 
@@ -16,7 +17,6 @@ A responsive, feature-packed online arcade and unblocked gaming portal hosted by
 - Curated retro classics, physics simulators, driving games, puzzles, 2-player showdowns, and action titles.
 - Clean iframe sandboxing, seamless fullscreen mode, and game favorite bookmarking.
 - Category filtering and instant fuzzy search across all titles.
-
 
 ### 🐧 VIP Penguin Lounge & Fish Coins Store
 - **Fish Coin Economy**: Earn coins simply by playing games and completing daily challenges.
@@ -37,7 +37,6 @@ A responsive, feature-packed online arcade and unblocked gaming portal hosted by
 - Fully mobile-responsive layout for desktop, Chromebooks, tablets, and phones.
 - Interactive mascot Pebbles who tells jokes and reacts to your achievements!
 
-
 If want more info contact me at both of my emails
 ishaan.yadav@franklinsabers.org 
 ishaany83@gmail.com
@@ -48,6 +47,8 @@ It will not work if you fork it
 
 ## 📜 License & Acknowledgements
 
-Created with ❤️ by **Ishaan Y*
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+
+Created with ❤️ by **Ishaan Y**
 Arcade games and embeds belong to their respective creators and copyright holders.
 Always support the penguins and nature
