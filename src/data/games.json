@@ -637,5 +637,23 @@
     "author": "Cookie Clicker / Web Edition",
     "isPopular": true,
     "isNew": true
+  },
+  {
+    "id": "run-from-the-robot",
+    "title": "Run from the Robot",
+    "slug": "run-from-the-robot",
+    "category": "Arcade",
+    "description": "A Scratch game. Click the green flag to start and follow the on-screen instructions.",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=600",
+    "embedUrl": "https://scratch.mit.edu/projects/1291152819/embed",
+    "embedType": "iframe",
+    "tags": ["scratch", "arcade", "community"],
+    "rating": 4.7,
+    "playCount": 0,
+    "controls": [
+      { "key": "Mouse / Keyboard", "action": "Follow on-screen instructions" }
+    ],
+    "author": "Scratch Community",
+    "isNew": true
   }
 ]
