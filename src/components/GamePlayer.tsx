@@ -22,7 +22,7 @@ import { PenguinMascot } from './PenguinMascot';
 import { LeaderboardSection } from './LeaderboardSection';
 import { GameFeedbackModal } from './GameFeedbackModal';
 import { MusicLoungePlayer } from './MusicLoungePlayer';
-import { UserAccount, getCurrentSessionUser } from '../utils/auth';
+import { UserAccount, getCurrentSessionUser, isUserCurrentlyBanned } from '../utils/auth';
 import { recordGameLaunch, addPlaytimeMinutes } from '../utils/trophies';
 
 interface GamePlayerProps {
@@ -58,6 +58,18 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const effectiveUser = currentUser || getCurrentSessionUser();
+
+  // Immediately exit game player if user is or becomes banned
+  useEffect(() => {
+    const user = effectiveUser || getCurrentSessionUser();
+    if (
+      user &&
+      isUserCurrentlyBanned(user) &&
+      (user.banType === 'full' || user.banType === 'temporary' || !user.banType)
+    ) {
+      onBack();
+    }
+  }, [effectiveUser, onBack]);
 
   // Track game launch and playtime for Penguin Trophies
   useEffect(() => {

@@ -5,12 +5,13 @@
     "name": "Pebbles (Ishaan)",
     "email": "ishaany83@gmail.com",
     "createdAt": "2026-09-22T00:16:31.626Z",
-    "lastLogin": "2026-09-26T21:27:56.068Z",
+    "lastLogin": "2026-11-08T13:16:17.896Z",
     "isAdmin": true,
     "isVip": true,
     "vipLevel": "Diamond",
+    "points": 10,
     "loginStreak": 1,
-    "lastStreakDate": "2026-09-21",
+    "lastStreakDate": "2026-11-08",
     "hasPenguinBadge": false,
     "mysteryGifts": [],
     "unlockedTrophyIds": [
@@ -18,17 +19,19 @@
     ]
   },
   "test_pass_alpha": {
+    "points": 10,
     "username": "test_pass_alpha",
     "passwordHash": "enc_sha256:12c129a362326b653597dc9c12ce328849a1cb6227a3215d66a6e92b29272d61",
     "name": "Alpha Tester Pass #1",
     "email": "alpha@gameland.test",
     "createdAt": "2026-09-21T18:00:59.503Z",
-    "lastLogin": "2026-09-26T21:27:56.095Z",
+    "lastLogin": "2026-11-08T13:35:13.859Z",
     "isAdmin": false,
     "isTestAccount": true,
     "testAccountUsed": false
   },
   "test_pass_beta": {
+    "points": 10,
     "username": "test_pass_beta",
     "passwordHash": "enc_sha256:12c129a362326b653597dc9c12ce328849a1cb6227a3215d66a6e92b29272d61",
     "name": "Beta Tester Pass #2",
@@ -40,6 +43,7 @@
     "testAccountUsed": false
   },
   "test_pass_vip": {
+    "points": 10,
     "username": "test_pass_vip",
     "passwordHash": "enc_sha256:12c129a362326b653597dc9c12ce328849a1cb6227a3215d66a6e92b29272d61",
     "name": "VIP Guest Pass #3",
@@ -54,33 +58,33 @@
     "vipGrantedAt": "2026-09-21T18:00:59.503Z"
   },
   "gamer": {
+    "points": 260,
     "username": "gamer",
     "passwordHash": "enc_sha256:8332b4675afa241069ba300a2ae3fd81e2c5e7cc0a87ea6d2572c87ed253da9f",
     "name": "Alex Gamer",
     "email": "gamer@gameland.com",
     "createdAt": "2026-08-25T16:23:14.638Z",
     "lastLogin": "2026-08-25T16:23:14.638Z",
-    "isAdmin": false,
-    "points": 260
+    "isAdmin": false
   },
   "pebbles": {
+    "points": 260,
     "username": "pebbles",
     "passwordHash": "enc_sha256:bdcfa49d06b2349d7da9561cb7647235e31f4b130369a7b1c5b28f2bc127b16f",
     "name": "Penguin Pebbles",
     "email": "pebbles@gameland.com",
     "createdAt": "2026-08-25T16:23:14.638Z",
     "lastLogin": "2026-08-25T16:23:14.638Z",
-    "isAdmin": false,
-    "points": 260
+    "isAdmin": false
   },
   "moksh": {
+    "points": 14,
     "username": "moksh",
     "passwordHash": "enc_sha256:d084ccfbba4b4fbaaebca560ad25185bdb115208e95565e23556ccdde8d5cfa6",
     "name": "moksh",
     "email": "Moksh.Kakarla@franklinsabers.org",
     "createdAt": "2026-09-03T16:57:44.273Z",
     "lastLogin": "2026-09-03T16:57:44.273Z",
-    "points": 14,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -93,13 +97,13 @@
     "mysteryGifts": []
   },
   "helloooooooo": {
+    "points": 15,
     "username": "helloooooooo",
     "passwordHash": "enc_sha256:9a562e15311c3821b5202290c3758b86a63285b23d1e562d055631e35a10cd18",
     "name": "Jackson",
     "email": "jackson.mauga@franklinsabers.org",
     "createdAt": "2026-09-03T17:04:46.914Z",
     "lastLogin": "2026-09-03T17:04:46.914Z",
-    "points": 15,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -121,13 +125,13 @@
     ]
   },
   "guy333": {
+    "points": 11,
     "username": "guy333",
     "passwordHash": "enc_sha256:3953312afa2a1dfb88b66e6b33e338501bf161a217e9b46d1b0de38bf982c662",
     "name": "Alex",
     "email": "alexander.romo@franklinsabers.org",
     "createdAt": "2026-09-09T19:35:51.154Z",
     "lastLogin": "2026-09-09T19:35:51.154Z",
-    "points": 11,
     "unlockedTrophyIds": [
       "first_game"
     ],
@@ -137,13 +141,13 @@
     "mysteryGifts": []
   },
   "gdkid": {
+    "points": 265,
     "username": "gdkid",
     "passwordHash": "enc_sha256:095c4251da16f215863e3d37a084302b9026f8347973d3c3d6a2c74fb7fa979f",
     "name": "GDKID",
     "email": "dalakjdfhkajdfhlk@gmail.com",
     "createdAt": "2026-08-25T16:47:26.212Z",
     "lastLogin": "2026-08-25T16:52:58.693Z",
-    "points": 265,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -159,6 +163,7 @@
     "vipGrantedAt": "2026-08-25T16:51:23.073Z"
   },
   "vip_member_3339": {
+    "points": 10,
     "username": "vip_member_3339",
     "passwordHash": "enc_sha256:98b90296f7186e7f79093099589d8c06ef20015ad799d40f40e7d02501e93153",
     "name": "VIP Gold Player #3339",
@@ -171,13 +176,13 @@
     "vipGrantedAt": "2026-08-25T16:51:50.525Z"
   },
   "gamerthegamemcbooootay": {
+    "points": 13,
     "username": "gamerthegamemcbooootay",
     "passwordHash": "enc_sha256:4c8525d1344f36258b779a592e781775f1a7e531d51aaa88c5f533c51455f5ea",
     "name": "Fart McBooty",
     "email": "butt.yayyy@gmail.com",
     "createdAt": "2026-09-09T19:37:39.526Z",
     "lastLogin": "2026-09-09T19:37:39.526Z",
-    "points": 13,
     "unlockedTrophyIds": [
       "first_game"
     ],
@@ -188,6 +193,7 @@
     "avatar": "gamer"
   },
   "gunveersingh": {
+    "points": 11,
     "username": "gunveersingh",
     "passwordHash": "enc_sha256:1a969580de7de17aa5c55c9b29ffaf115c2903b68837d8364de237adf800bf54",
     "name": "Gunveer Singh",
@@ -199,7 +205,6 @@
     "hasPenguinBadge": false,
     "mysteryGifts": [],
     "avatar": "ninja",
-    "points": 11,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -207,13 +212,13 @@
     ]
   },
   "easton": {
+    "points": 12,
     "username": "easton",
     "passwordHash": "enc_sha256:3503ce293d4c84088644bff46f21cac141adcca2c4f1124cf109cd3a533ea89c",
     "name": "Easton",
     "email": "eaton.gray@franklinsabers.org",
     "createdAt": "2026-09-09T19:39:35.528Z",
     "lastLogin": "2026-09-09T19:39:35.528Z",
-    "points": 12,
     "unlockedTrophyIds": [
       "first_game"
     ],
@@ -226,13 +231,13 @@
     "vipGrantedAt": "2026-09-10T16:29:34.811Z"
   },
   "everett": {
+    "points": 12,
     "username": "everett",
     "passwordHash": "enc_sha256:34fefd16dd87315a9373578126c511f7d6fe34530a75f5f3d21e859c1914e727",
     "name": "everett",
     "email": "everett.zielinski@franklinsabers.org",
     "createdAt": "2026-09-09T19:42:25.057Z",
     "lastLogin": "2026-09-09T19:42:25.057Z",
-    "points": 12,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m"
@@ -247,13 +252,13 @@
     "avatar": "classic"
   },
   "esmr": {
+    "points": 11,
     "username": "esmr",
     "passwordHash": "enc_sha256:e0f08d753df52786d661fefc8af21c69bdf6c338fbe31f5ea6dcea54b0b986ca",
     "name": "Esmr",
     "email": "esme.priestaf@franklinsabers.org",
     "createdAt": "2026-09-09T19:52:26.895Z",
     "lastLogin": "2026-09-09T19:52:26.895Z",
-    "points": 11,
     "unlockedTrophyIds": [
       "first_game"
     ],
@@ -264,13 +269,13 @@
     "avatar": "king"
   },
   "rsmr": {
+    "points": 12,
     "username": "rsmr",
     "passwordHash": "enc_sha256:21096f5d766c683f942975a3ead41e731c8e19c937d83aa4183cb8897f89652d",
     "name": "Rsmr",
     "email": "reya.mees@franklinsabers.org",
     "createdAt": "2026-09-09T19:52:55.081Z",
     "lastLogin": "2026-09-09T19:52:55.081Z",
-    "points": 12,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -282,6 +287,7 @@
     "mysteryGifts": []
   },
   "vip_member_9144": {
+    "points": 10,
     "username": "vip_member_9144",
     "passwordHash": "enc_sha256:98b90296f7186e7f79093099589d8c06ef20015ad799d40f40e7d02501e93153",
     "name": "VIP Gold Player #9144",
@@ -294,13 +300,13 @@
     "vipGrantedAt": "2026-09-09T19:54:05.797Z"
   },
   "imdagoat": {
+    "points": 11,
     "username": "imdagoat",
     "passwordHash": "enc_sha256:14d6cc5932fbdca82f6aadbc804fb14344d84ce133d1b56736c1c02611b3132f",
     "name": "Allison Gannon",
     "email": "allison.gannon@franklinsabers.org",
     "createdAt": "2026-09-10T16:11:53.481Z",
     "lastLogin": "2026-09-10T16:11:53.481Z",
-    "points": 11,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -312,13 +318,13 @@
     "mysteryGifts": []
   },
   "tyler": {
+    "points": 12,
     "username": "tyler",
     "passwordHash": "enc_sha256:237000ca7aacc747628b39be6e76b6d69825543c53f529b870c46e54881477d7",
     "name": "tyler",
     "email": "tyler.nelson@franklin.com",
     "createdAt": "2026-09-10T16:13:41.426Z",
     "lastLogin": "2026-09-10T16:13:41.426Z",
-    "points": 12,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m"
@@ -329,13 +335,13 @@
     "mysteryGifts": []
   },
   "landon": {
+    "points": 11,
     "username": "landon",
     "passwordHash": "enc_sha256:e59491bcc143bf27ab4f55b4ac11fb88431f2a1f26c8c1b8e9f1d7181032dcd5",
     "name": "l.g",
     "email": "landon.gannon@franklinsabers.org",
     "createdAt": "2026-09-10T16:25:11.221Z",
     "lastLogin": "2026-09-10T16:25:11.221Z",
-    "points": 11,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -343,13 +349,13 @@
     ]
   },
   "gru": {
+    "points": 14,
     "username": "gru",
     "passwordHash": "enc_sha256:b388b0193d32128988aa88f06a61e581ebc71fcb2adb7f9f04f82bf5966c3659",
     "name": "gru",
     "email": "scarlett.stamborski@franklinsabers.org",
     "createdAt": "2026-09-11T16:35:20.713Z",
     "lastLogin": "2026-09-11T16:35:20.713Z",
-    "points": 14,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -361,6 +367,7 @@
     "mysteryGifts": []
   },
   "gfvbyfrbv": {
+    "points": 11,
     "username": "gfvbyfrbv",
     "passwordHash": "enc_sha256:3baf1c0695a2411047789f572d2dd52e3074c114494aaf385b68b52fe9345ad9",
     "name": "wahgfdx",
@@ -376,17 +383,16 @@
     "lastStreakDate": "2026-09-11",
     "hasPenguinBadge": false,
     "mysteryGifts": [],
-    "points": 11,
     "avatar": "classic"
   },
   "sabers6414": {
+    "points": 11,
     "username": "sabers6414",
     "passwordHash": "enc_sha256:7a22b9262931e8860636d69613e984a4f17990603a06402c7e3510b0429026c9",
     "name": "firewolf",
     "email": "logan.gradall@franklinsabers.org",
     "createdAt": "2026-09-11T19:44:33.038Z",
     "lastLogin": "2026-09-11T19:44:33.038Z",
-    "points": 11,
     "unlockedTrophyIds": [
       "first_game"
     ],
@@ -402,13 +408,13 @@
     "mysteryGifts": []
   },
   "life": {
+    "points": 13,
     "username": "life",
     "passwordHash": "enc_sha256:262f0334cd7d6adaaa463d04dc7a5c6bc0d17318bb47771c24faa1dac1e7f351",
     "name": "Emilia",
     "email": "emilia.awe@franklinsabers.org",
     "createdAt": "2026-09-11T19:53:41.337Z",
     "lastLogin": "2026-09-11T19:53:41.337Z",
-    "points": 13,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -420,13 +426,13 @@
     "mysteryGifts": []
   },
   "girl23": {
+    "points": 11,
     "username": "girl23",
     "passwordHash": "enc_sha256:b589c33e2fb62aab4458e90e4f194a16f26d9ebdd09c9c4a96b76013c6e38c5e",
     "name": "Tocool4u",
     "email": "ishwarya.suresh@franklinsabers.org",
     "createdAt": "2026-09-11T19:54:52.333Z",
     "lastLogin": "2026-09-11T19:54:52.333Z",
-    "points": 11,
     "unlockedTrophyIds": [
       "first_game"
     ],
@@ -436,18 +442,19 @@
     "mysteryGifts": []
   },
   "kingboy": {
+    "points": 11,
     "username": "kingboy",
     "passwordHash": "enc_sha256:b589c33e2fb62aab4458e90e4f194a16f26d9ebdd09c9c4a96b76013c6e38c5e",
     "name": "kingboy",
     "email": "Kousthub.nethi@frankilnsabers.org",
     "createdAt": "2026-09-12T16:11:42.249Z",
     "lastLogin": "2026-09-12T16:11:42.249Z",
-    "points": 11,
     "unlockedTrophyIds": [
       "first_game"
     ]
   },
   "pky": {
+    "points": 135,
     "username": "pky",
     "passwordHash": "enc_sha256:9d43aee165013be66079d5ae752c35bc98ffdedfb5578bd8bd8e1c00d356c250",
     "name": "PKY",
@@ -457,17 +464,16 @@
     "loginStreak": 2,
     "lastStreakDate": "2026-08-09",
     "hasPenguinBadge": true,
-    "mysteryGifts": [],
-    "points": 135
+    "mysteryGifts": []
   },
   "micah9081": {
+    "points": 11,
     "username": "micah9081",
     "passwordHash": "enc_sha256:d266df9fa024007b2ebde9483e80226d7e8cc8929b134516412b8b3d152ba175",
     "name": "Micah Romo",
     "email": "micah.romo@franklinsabers.org",
     "createdAt": "2026-09-13T23:32:37.296Z",
     "lastLogin": "2026-09-13T23:32:37.296Z",
-    "points": 11,
     "unlockedTrophyIds": [
       "first_game",
       "playtime_1m",
@@ -486,6 +492,7 @@
     ]
   },
   "notwesley": {
+    "points": 10,
     "username": "NotWesley",
     "passwordHash": "enc_sha256:355a5d6f0996018e1736a1a3f09b1f00298c5c374ac823de06ca73f1b4ed3338",
     "name": "NotWesley",
@@ -498,18 +505,18 @@
     "vipGrantedAt": "2026-09-22T00:23:59.743Z"
   },
   "health_check_user": {
+    "points": 10,
     "createdAt": "2026-09-25T21:29:07.347Z",
     "lastLogin": "2026-09-25T21:29:07.347Z",
-    "points": 10,
     "username": "health_check_user",
     "passwordHash": "enc_sha256:5394be75fc03db72faff7763c0f3ecbf24c3932a46d13075649076da04c230eb",
     "email": "hc@test.local",
     "name": "HC User"
   },
   "encrypt_test_user_77": {
+    "points": 10,
     "createdAt": "2026-09-26T21:27:58.686Z",
     "lastLogin": "2026-09-26T21:28:01.764Z",
-    "points": 10,
     "username": "encrypt_test_user_77",
     "email": "enc@test.com",
     "name": "Encrypted User",

@@ -49,6 +49,9 @@ import {
   TrendingUp,
   RefreshCw,
   Layers,
+  ShieldAlert,
+  Timer,
+  UserX,
 } from 'lucide-react';
 import { Game, CategoryType } from '../types';
 import {
@@ -120,6 +123,11 @@ import {
   adminRejectVipOrderByUsername,
   syncUsersWithServer,
   saveUsers,
+  banUserAccount,
+  unbanUserAccount,
+  isUserCurrentlyBanned,
+  formatBanDurationRemaining,
+  BanType,
 } from '../utils/auth';
 import {
   resetAllLeaderboardsToZero,
@@ -207,6 +215,16 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
   const [editingUserPass, setEditingUserPass] = useState<string | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [userMsg, setUserMsg] = useState('');
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'vip' | 'banned'>('all');
+
+  // Ban User Modal state
+  const [banModalTargetUser, setBanModalTargetUser] = useState<(UserAccount & { passwordHash?: string }) | null>(null);
+  const [banType, setBanType] = useState<BanType>('full');
+  const [banDurationOption, setBanDurationOption] = useState<'15m' | '1h' | '12h' | '24h' | '3d' | '7d' | '30d' | 'permanent' | 'custom'>('24h');
+  const [banCustomHours, setBanCustomHours] = useState<number>(48);
+  const [banReasonPreset, setBanReasonPreset] = useState<string>('Violation of GameLand Community Guidelines & Rules');
+  const [banCustomReason, setBanCustomReason] = useState<string>('');
+  const [isBanningInProgress, setIsBanningInProgress] = useState<boolean>(false);
 
   // Add User Form
   const [showAddUserForm, setShowAddUserForm] = useState(false);
@@ -778,6 +796,113 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
   const handleDeleteUser = (_username: string) => {
     setUserMsg(`Account deletion is permanently disabled. All accounts are saved in the backend and can never be deleted.`);
     setTimeout(() => setUserMsg(''), 3500);
+  };
+
+  // Ban User Modal Handlers
+  const handleOpenBanModal = (user: UserAccount & { passwordHash?: string }) => {
+    setBanModalTargetUser(user);
+    setBanType('full');
+    setBanDurationOption('24h');
+    setBanCustomHours(48);
+    setBanReasonPreset('Violation of GameLand Community Guidelines & Rules');
+    setBanCustomReason('');
+  };
+
+  const handleCloseBanModal = () => {
+    setBanModalTargetUser(null);
+    setBanCustomReason('');
+    setIsBanningInProgress(false);
+  };
+
+  const handleConfirmBan = async () => {
+    if (!banModalTargetUser) return;
+    setIsBanningInProgress(true);
+
+    let durationHours: number | null = null;
+    let durationLabel = 'Permanent';
+
+    switch (banDurationOption) {
+      case '15m':
+        durationHours = 0.25;
+        durationLabel = '15 Minutes';
+        break;
+      case '1h':
+        durationHours = 1;
+        durationLabel = '1 Hour';
+        break;
+      case '12h':
+        durationHours = 12;
+        durationLabel = '12 Hours';
+        break;
+      case '24h':
+        durationHours = 24;
+        durationLabel = '24 Hours (1 Day)';
+        break;
+      case '3d':
+        durationHours = 72;
+        durationLabel = '3 Days';
+        break;
+      case '7d':
+        durationHours = 168;
+        durationLabel = '7 Days (1 Week)';
+        break;
+      case '30d':
+        durationHours = 720;
+        durationLabel = '30 Days (1 Month)';
+        break;
+      case 'custom':
+        durationHours = Math.max(0.1, Number(banCustomHours) || 1);
+        durationLabel = `${durationHours} Hour(s)`;
+        break;
+      case 'permanent':
+      default:
+        durationHours = null;
+        durationLabel = 'Permanent Ban';
+        break;
+    }
+
+    const finalReason = banCustomReason.trim()
+      ? `${banReasonPreset} — ${banCustomReason.trim()}`
+      : banReasonPreset;
+
+    const res = banUserAccount({
+      username: banModalTargetUser.username,
+      banType,
+      durationHours,
+      reason: finalReason,
+      adminUsername: 'pebblesthepenguinishaany83',
+    });
+
+    if (res.success) {
+      addAuditLog(
+        'users',
+        `Admin banned account "${banModalTargetUser.username}" [Type: ${banType.toUpperCase()}, Duration: ${durationLabel}, Reason: "${finalReason}"]`
+      );
+      setUserMsg(`🚫 Successfully banned "${banModalTargetUser.username}" (${durationLabel}). Restriction applied immediately!`);
+      refreshData();
+      handleCloseBanModal();
+    } else {
+      setUserMsg(`Failed to ban account: ${res.error || 'Unknown error'}`);
+    }
+
+    setIsBanningInProgress(false);
+    setTimeout(() => setUserMsg(''), 4500);
+  };
+
+  const handleUnbanUser = async (username: string) => {
+    if (!window.confirm(`Lift ban and restore full platform access for user "${username}"?`)) {
+      return;
+    }
+
+    const res = unbanUserAccount(username, 'pebblesthepenguinishaany83');
+    if (res.success) {
+      addAuditLog('users', `Admin unbanned account "${username}" and restored full platform access.`);
+      setUserMsg(`🛡️ Unbanned "${username}"! Full account access and privileges restored.`);
+      refreshData();
+    } else {
+      setUserMsg(`Failed to unban account: ${res.error || 'Unknown error'}`);
+    }
+    setTimeout(() => setUserMsg(''), 4000);
   };
 
   const handleUpdatePassword = (username: string) => {
@@ -2633,6 +2758,58 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                 </div>
               </div>
 
+              {/* Status Filter Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+                  <Filter className="w-3 h-3 text-slate-500" /> Status:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setUserStatusFilter('all')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                    userStatusFilter === 'all'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  All Users ({usersList.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserStatusFilter('active')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                    userStatusFilter === 'active'
+                      ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  Active ({usersList.filter((u) => !isUserCurrentlyBanned(u)).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserStatusFilter('vip')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                    userStatusFilter === 'vip'
+                      ? 'bg-yellow-500 text-slate-950 shadow-sm'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  VIP Members ({usersList.filter((u) => u.isVip).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserStatusFilter('banned')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    userStatusFilter === 'banned'
+                      ? 'bg-rose-500 text-white shadow-sm'
+                      : 'bg-slate-900 text-rose-400 hover:text-rose-300 border border-rose-500/30'
+                  }`}
+                >
+                  <Ban className="w-3 h-3" />
+                  <span>Banned ({usersList.filter((u) => isUserCurrentlyBanned(u)).length})</span>
+                </button>
+              </div>
+
               {userMsg && (
                 <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 shrink-0" />
@@ -2742,24 +2919,35 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
                       {usersList
-                        .filter(
-                          (u) =>
-                            !userSearch ||
-                            u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-                            (u.name && u.name.toLowerCase().includes(userSearch.toLowerCase())) ||
-                            (u.email && u.email.toLowerCase().includes(userSearch.toLowerCase()))
-                        )
+                        .filter((u) => {
+                          if (userStatusFilter === 'active' && isUserCurrentlyBanned(u)) return false;
+                          if (userStatusFilter === 'vip' && !u.isVip) return false;
+                          if (userStatusFilter === 'banned' && !isUserCurrentlyBanned(u)) return false;
+                          if (!userSearch) return true;
+                          const s = userSearch.toLowerCase();
+                          return (
+                            u.username.toLowerCase().includes(s) ||
+                            (u.name && u.name.toLowerCase().includes(s)) ||
+                            (u.email && u.email.toLowerCase().includes(s))
+                          );
+                        })
                         .map((user) => {
                           const isPrimaryAdmin =
                             user.username.toLowerCase() === 'pebblesthepenguinishaany83';
+                          const isBanned = isUserCurrentlyBanned(user);
                           return (
-                            <tr key={user.username} className="hover:bg-slate-800/40 transition-colors">
+                            <tr key={user.username} className={`hover:bg-slate-800/40 transition-colors ${isBanned ? 'bg-rose-950/15' : ''}`}>
                               <td className="py-3 px-4">
                                 <div className="font-extrabold text-white flex items-center gap-2">
                                   <span>{user.username}</span>
                                   {isPrimaryAdmin && (
                                     <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase font-black">
                                       Owner Admin
+                                    </span>
+                                  )}
+                                  {isBanned && (
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/25 text-rose-300 border border-rose-500/50 uppercase font-black animate-pulse">
+                                      Banned
                                     </span>
                                   )}
                                   {user.isTestAccount && (
@@ -2801,7 +2989,26 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                               </td>
 
                               <td className="py-3 px-4">
-                                {isPrimaryAdmin || user.isAdmin ? (
+                                {isBanned ? (
+                                  <div className="flex flex-col gap-1 items-start">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-black uppercase tracking-wider shadow-sm shadow-rose-500/10">
+                                      <Ban className="w-3 h-3 text-rose-400" />
+                                      <span>
+                                        {user.banType === 'mute'
+                                          ? 'Muted'
+                                          : user.banType === 'leaderboard'
+                                          ? 'Scores Ban'
+                                          : user.banType === 'temporary'
+                                          ? 'Suspended'
+                                          : 'Banned'}
+                                      </span>
+                                    </span>
+                                    <span className="text-[9px] text-rose-400 font-mono flex items-center gap-1" title={user.banReason || 'Rule violation'}>
+                                      <Timer className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                                      <span>{formatBanDurationRemaining(user.banExpiresAt)}</span>
+                                    </span>
+                                  </div>
+                                ) : isPrimaryAdmin || user.isAdmin ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
                                     <ShieldCheck className="w-3 h-3 text-amber-400" />
                                     Admin
@@ -2945,6 +3152,26 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                                       >
                                         {user.isAdmin ? 'Revoke Admin' : 'Make Admin'}
                                       </button>
+
+                                      {isBanned ? (
+                                        <button
+                                          onClick={() => handleUnbanUser(user.username)}
+                                          className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                                          title="Lift ban and restore full platform access"
+                                        >
+                                          <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                                          <span>Unban</span>
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={() => handleOpenBanModal(user)}
+                                          className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[10px] font-bold transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                                          title="Ban user account with options for ban type, duration, and reason"
+                                        >
+                                          <Ban className="w-3 h-3 text-rose-400" />
+                                          <span>Ban</span>
+                                        </button>
+                                      )}
 
                                       <span
                                         className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold"
@@ -3535,6 +3762,284 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
             Close Panel
           </button>
         </div>
+
+        {/* Ban User Dialog Overlay */}
+        {banModalTargetUser && (
+          <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-rose-500/50 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden my-auto animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="p-5 bg-gradient-to-r from-rose-950/80 via-slate-900 to-slate-950 border-b border-rose-500/30 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-lg shadow-rose-500/20">
+                    <Ban className="w-6 h-6 text-rose-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                      <span>Ban User Account</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500 text-slate-950 font-black uppercase tracking-wider">
+                        Moderation Action
+                      </span>
+                    </h3>
+                    <p className="text-xs text-rose-300/80">Select restriction type, duration, and community guideline reason</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseBanModal}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+                {/* Target User Info Banner */}
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-lg shrink-0">
+                      {banModalTargetUser.avatar ? banModalTargetUser.avatar : '👤'}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-white text-sm truncate">{banModalTargetUser.username}</span>
+                        {banModalTargetUser.isVip && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
+                            VIP {banModalTargetUser.vipLevel || 'Gold'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate">
+                        {banModalTargetUser.email || 'No email registered'} • Registered {new Date(banModalTargetUser.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-xs font-mono font-bold text-amber-400 block">
+                      🪙 {banModalTargetUser.points !== undefined ? banModalTargetUser.points : 10} PTS
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-semibold">
+                      Status: {isUserCurrentlyBanned(banModalTargetUser) ? 'Currently Banned' : 'Active'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 1. Ban Type Selector */}
+                <div>
+                  <label className="text-xs font-black text-slate-200 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                    <ShieldAlert className="w-4 h-4 text-rose-400" />
+                    <span>1. Select Ban Type & Restriction Level</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* Full Account Lockout */}
+                    <button
+                      type="button"
+                      onClick={() => setBanType('full')}
+                      className={`p-3 rounded-2xl border text-left transition-all relative cursor-pointer ${
+                        banType === 'full'
+                          ? 'bg-rose-950/40 border-rose-500 text-white shadow-lg shadow-rose-500/10 ring-1 ring-rose-500'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-extrabold text-xs text-rose-400 flex items-center gap-1.5">
+                          <Ban className="w-3.5 h-3.5" /> Full Account Lockout
+                        </span>
+                        {banType === 'full' && <span className="w-2 h-2 rounded-full bg-rose-400"></span>}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Completely locks account. User cannot sign in, and active sessions are revoked immediately.
+                      </p>
+                    </button>
+
+                    {/* Temporary Cool-Off Suspension */}
+                    <button
+                      type="button"
+                      onClick={() => setBanType('temporary')}
+                      className={`p-3 rounded-2xl border text-left transition-all relative cursor-pointer ${
+                        banType === 'temporary'
+                          ? 'bg-amber-950/40 border-amber-500 text-white shadow-lg shadow-amber-500/10 ring-1 ring-amber-500'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-extrabold text-xs text-amber-400 flex items-center gap-1.5">
+                          <Timer className="w-3.5 h-3.5" /> Temporary Suspension
+                        </span>
+                        {banType === 'temporary' && <span className="w-2 h-2 rounded-full bg-amber-400"></span>}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Suspends access temporarily. Lifts automatically once the countdown timer expires.
+                      </p>
+                    </button>
+
+                    {/* Chat & Social Mute */}
+                    <button
+                      type="button"
+                      onClick={() => setBanType('mute')}
+                      className={`p-3 rounded-2xl border text-left transition-all relative cursor-pointer ${
+                        banType === 'mute'
+                          ? 'bg-purple-950/40 border-purple-500 text-white shadow-lg shadow-purple-500/10 ring-1 ring-purple-500'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-extrabold text-xs text-purple-400 flex items-center gap-1.5">
+                          <MessageSquare className="w-3.5 h-3.5" /> Chat & Social Mute
+                        </span>
+                        {banType === 'mute' && <span className="w-2 h-2 rounded-full bg-purple-400"></span>}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Can still play games, but blocked from sending messages in chat or posting comments.
+                      </p>
+                    </button>
+
+                    {/* Leaderboard Ban */}
+                    <button
+                      type="button"
+                      onClick={() => setBanType('leaderboard')}
+                      className={`p-3 rounded-2xl border text-left transition-all relative cursor-pointer ${
+                        banType === 'leaderboard'
+                          ? 'bg-blue-950/40 border-blue-500 text-white shadow-lg shadow-blue-500/10 ring-1 ring-blue-500'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-extrabold text-xs text-blue-400 flex items-center gap-1.5">
+                          <Award className="w-3.5 h-3.5" /> Leaderboard Ban
+                        </span>
+                        {banType === 'leaderboard' && <span className="w-2 h-2 rounded-full bg-blue-400"></span>}
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        Disqualifies user from high score leaderboards, competitions, and tournament rankings.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Ban Duration Selector */}
+                <div>
+                  <label className="text-xs font-black text-slate-200 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-cyan-400" />
+                    <span>2. Select Ban Duration</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: '15m', label: '15 Minutes', sub: 'Quick Timeout' },
+                      { id: '1h', label: '1 Hour', sub: 'Cool-Down' },
+                      { id: '12h', label: '12 Hours', sub: 'Half Day' },
+                      { id: '24h', label: '24 Hours', sub: '1 Full Day' },
+                      { id: '3d', label: '3 Days', sub: 'Short Ban' },
+                      { id: '7d', label: '7 Days', sub: '1 Week' },
+                      { id: '30d', label: '30 Days', sub: '1 Month' },
+                      { id: 'permanent', label: '♾️ Permanent', sub: 'Indefinite' },
+                    ].map((dur) => (
+                      <button
+                        key={dur.id}
+                        type="button"
+                        onClick={() => setBanDurationOption(dur.id as any)}
+                        className={`py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                          banDurationOption === dur.id
+                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold shadow-sm'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-400'
+                        }`}
+                      >
+                        <div className="text-xs font-extrabold">{dur.label}</div>
+                        <div className="text-[9px] text-slate-500">{dur.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom Duration Option */}
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBanDurationOption('custom')}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                        banDurationOption === 'custom'
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200'
+                          : 'bg-slate-950 border-slate-800 text-slate-400'
+                      }`}
+                    >
+                      Custom Hours:
+                    </button>
+                    {banDurationOption === 'custom' && (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="0.5"
+                          max="8760"
+                          step="0.5"
+                          value={banCustomHours}
+                          onChange={(e) => setBanCustomHours(Number(e.target.value))}
+                          className="w-24 px-3 py-1.5 rounded-xl bg-slate-950 border border-cyan-500 text-white text-xs font-mono font-bold focus:outline-none"
+                        />
+                        <span className="text-xs text-slate-400">hours</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Reason Preset & Custom Explanation */}
+                <div>
+                  <label className="text-xs font-black text-slate-200 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-400" />
+                    <span>3. Reason for Ban</span>
+                  </label>
+                  <select
+                    value={banReasonPreset}
+                    onChange={(e) => setBanReasonPreset(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs font-medium focus:outline-none focus:border-rose-500 mb-2 cursor-pointer"
+                  >
+                    <option value="Violation of GameLand Community Guidelines & Rules">📜 Violation of GameLand Community Guidelines & Rules</option>
+                    <option value="Cheating, speed hacking, or unauthorized bot script exploits">🚨 Cheating, speed hacking, or unauthorized bot scripts</option>
+                    <option value="Cyberbullying, offensive language, toxic behavior, or harassment">🤬 Cyberbullying, offensive language, or harassment</option>
+                    <option value="Inappropriate username, avatar, or profile information">🛑 Inappropriate username, avatar, or profile</option>
+                    <option value="Chat spamming, repeated message flooding, or advertising">📢 Chat spamming, message flooding, or advertising</option>
+                    <option value="School / classroom disruption or academic policy violation">🏫 School / classroom disruption or policy violation</option>
+                    <option value="Account sharing or suspicious multi-device activity">🔐 Account sharing or security violation</option>
+                    <option value="Other reason">📝 Other custom reason</option>
+                  </select>
+
+                  <input
+                    type="text"
+                    placeholder="Additional moderator note or detail shown to user (optional)..."
+                    value={banCustomReason}
+                    onChange={(e) => setBanCustomReason(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                {/* Warning Callout */}
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
+                  <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">
+                    Applying this ban will immediately restrict the user across all servers and real-time sockets. All moderation actions are logged to the audit log.
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleCloseBanModal}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isBanningInProgress}
+                  onClick={handleConfirmBan}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-xs font-black transition-all shadow-lg shadow-rose-600/30 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Ban className="w-4 h-4" />
+                  <span>{isBanningInProgress ? 'Applying Ban...' : 'Confirm & Apply Ban'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

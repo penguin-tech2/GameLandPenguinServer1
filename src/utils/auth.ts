@@ -8,6 +8,8 @@ import {
   cloudRunUpdateVip,
   cloudRunMassCoins,
   cloudRunPromoteAllVip,
+  cloudRunBanUser,
+  cloudRunUnbanUser,
 } from './socketClient';
 import {
   encryptPassword,
@@ -62,7 +64,15 @@ export interface UserAccount {
   snacksInventory?: Record<string, number>;
   penguinHappiness?: number;
   penguinFeedCount?: number;
+  isBanned?: boolean;
+  banType?: 'full' | 'temporary' | 'mute' | 'leaderboard';
+  banReason?: string;
+  bannedAt?: string;
+  banExpiresAt?: string | null;
+  bannedBy?: string;
 }
+
+export type BanType = 'full' | 'temporary' | 'mute' | 'leaderboard';
 
 export interface PenguinSnackItem {
   id: string;
@@ -245,6 +255,12 @@ type StoredUserRecord = {
   snacksInventory?: Record<string, number>;
   penguinHappiness?: number;
   penguinFeedCount?: number;
+  isBanned?: boolean;
+  banType?: BanType;
+  banReason?: string;
+  bannedAt?: string;
+  banExpiresAt?: string | null;
+  bannedBy?: string;
 };
 
 const DEFAULT_USERS: Record<string, StoredUserRecord> = {
@@ -792,7 +808,29 @@ export function getCurrentSessionUser(): UserAccount | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const session: UserAccount = JSON.parse(raw);
+    if (!session || !session.username) return null;
+
+    // Cross-check against the authoritative stored users database
+    const users = getStoredUsers();
+    const lowerKey = session.username.toLowerCase();
+    const record = users[lowerKey];
+    if (record) {
+      const activeBan = isUserCurrentlyBanned(record);
+      session.isBanned = activeBan;
+      session.banType = record.banType;
+      session.banReason = record.banReason;
+      session.banExpiresAt = record.banExpiresAt;
+      session.bannedAt = record.bannedAt;
+      session.bannedBy = record.bannedBy;
+      if (record.points !== undefined) session.points = record.points;
+      if (record.isVip !== undefined) session.isVip = record.isVip;
+      if (record.vipLevel !== undefined) session.vipLevel = record.vipLevel;
+      if (record.isAdmin !== undefined) session.isAdmin = record.isAdmin || lowerKey === ADMIN_USERNAME.toLowerCase();
+      // Keep session updated in localStorage
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    }
+    return session;
   } catch {
     return null;
   }
@@ -921,6 +959,19 @@ export function loginAccount(usernameInput: string, passwordInput: string): { su
     return { success: false, error: 'Incorrect password. Please try again.' };
   }
 
+  // Active Ban verification
+  if (isUserCurrentlyBanned(record)) {
+    if (!record.banType || record.banType === 'full' || record.banType === 'temporary') {
+      const remaining = formatBanDurationRemaining(record.banExpiresAt);
+      const banTypeLabel = record.banType === 'temporary' ? 'Temporary Suspension' : 'Full Account Ban';
+      const expireNote = record.banExpiresAt ? `Expires on ${new Date(record.banExpiresAt).toLocaleString()}` : 'Indefinite / Permanent';
+      return {
+        success: false,
+        error: `⛔ ${banTypeLabel}: This account has been banned from GameLand. Reason: "${record.banReason || 'Violation of Community Rules & Terms'}". Duration: ${remaining} (${expireNote}).`,
+      };
+    }
+  }
+
   // Single-use test account validation
   if (record.isTestAccount && !isPassLimitOverrideActive()) {
     if (hasDeviceUsedTestAccount()) {
@@ -981,6 +1032,12 @@ export function loginAccount(usernameInput: string, passwordInput: string): { su
     snacksInventory: record.snacksInventory || {},
     penguinHappiness: record.penguinHappiness ?? 85,
     penguinFeedCount: record.penguinFeedCount ?? 0,
+    isBanned: isUserCurrentlyBanned(record),
+    banType: record.banType,
+    banReason: record.banReason,
+    bannedAt: record.bannedAt,
+    banExpiresAt: record.banExpiresAt,
+    bannedBy: record.bannedBy,
   };
 
   setCurrentSessionUser(user);
@@ -1066,6 +1123,12 @@ export function getAllUserRecords(): (UserAccount & { passwordHash: string })[] 
     penguinHappiness: record.penguinHappiness ?? 85,
     penguinFeedCount: record.penguinFeedCount ?? 0,
     points: record.points ?? 0,
+    isBanned: isUserCurrentlyBanned(record),
+    banType: record.banType,
+    banReason: record.banReason,
+    bannedAt: record.bannedAt,
+    banExpiresAt: record.banExpiresAt,
+    bannedBy: record.bannedBy,
   }));
 }
 
@@ -1192,6 +1255,192 @@ export function generateNewVipAccount(level: 'Gold' | 'Diamond' | 'Platinum' | '
 export function deleteUserAccount(_username: string): boolean {
   console.warn('Account deletion is permanently disabled. User accounts are permanent and cannot be deleted.');
   return false;
+}
+
+export function isUserCurrentlyBanned(
+  recordOrUser?: { isBanned?: boolean; banExpiresAt?: string | null } | null
+): boolean {
+  if (!recordOrUser || !recordOrUser.isBanned) return false;
+  if (!recordOrUser.banExpiresAt) return true; // Permanent ban
+  const expireTime = new Date(recordOrUser.banExpiresAt).getTime();
+  if (isNaN(expireTime)) return true;
+  return Date.now() < expireTime;
+}
+
+export function formatBanDurationRemaining(banExpiresAt?: string | null): string {
+  if (!banExpiresAt) return 'Permanent';
+  const diffMs = new Date(banExpiresAt).getTime() - Date.now();
+  if (diffMs <= 0) return 'Expired';
+  const diffMins = Math.ceil(diffMs / (1000 * 60));
+  if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? '' : 's'}`;
+  const diffHours = Math.floor(diffMins / 60);
+  const remMins = diffMins % 60;
+  if (diffHours < 24) return `${diffHours}h ${remMins > 0 ? remMins + 'm' : ''}`;
+  const diffDays = Math.floor(diffHours / 24);
+  const remHours = diffHours % 24;
+  return `${diffDays}d ${remHours > 0 ? remHours + 'h' : ''}`;
+}
+
+export interface BanUserOptions {
+  username: string;
+  banType: BanType;
+  durationHours: number | null; // null = permanent
+  reason: string;
+  adminUsername?: string;
+}
+
+export function banUserAccount(options: BanUserOptions): { success: boolean; error?: string; user?: UserAccount } {
+  const { username, banType, durationHours, reason, adminUsername } = options;
+  const lowerKey = username.trim().toLowerCase();
+
+  if (lowerKey === ADMIN_USERNAME.toLowerCase()) {
+    return { success: false, error: 'The primary owner administrator account (Pebbles) cannot be banned.' };
+  }
+
+  const users = getStoredUsers();
+  const record = users[lowerKey];
+  if (!record) {
+    return { success: false, error: `User account "${username}" not found in database.` };
+  }
+
+  if (record.isAdmin) {
+    record.isAdmin = false;
+  }
+
+  const now = new Date();
+  const banExpiresAt =
+    durationHours !== null && durationHours > 0
+      ? new Date(now.getTime() + durationHours * 3600 * 1000).toISOString()
+      : null;
+
+  record.isBanned = true;
+  record.banType = banType;
+  record.banReason = reason.trim() || 'Violation of GameLand Community Guidelines & Rules';
+  record.bannedAt = now.toISOString();
+  record.banExpiresAt = banExpiresAt;
+  record.bannedBy = adminUsername || ADMIN_USERNAME;
+
+  saveUsers(users);
+
+  // Update active session if it matches the banned user
+  const currentSession = getCurrentSessionUser();
+  if (currentSession && currentSession.username.toLowerCase() === lowerKey) {
+    setCurrentSessionUser({
+      ...currentSession,
+      isBanned: true,
+      banType,
+      banReason: record.banReason,
+      bannedAt: record.bannedAt,
+      banExpiresAt,
+      bannedBy: record.bannedBy,
+    });
+  }
+
+  // Broadcast real-time multi-tab & window security events
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('gameland_session_banned', {
+          detail: { username: lowerKey, banType, reason: record.banReason, banExpiresAt },
+        })
+      );
+      window.dispatchEvent(
+        new CustomEvent('gameland_user_banned', {
+          detail: { username: lowerKey, banType, reason: record.banReason, banExpiresAt },
+        })
+      );
+      window.dispatchEvent(new Event('gameland_users_updated'));
+
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('gameland_security_broadcast');
+        bc.postMessage({
+          type: 'USER_BANNED',
+          username: lowerKey,
+          banType,
+          reason: record.banReason,
+          banExpiresAt,
+        });
+        bc.close();
+      }
+    }
+  } catch (e) {
+    console.error('Failed to dispatch ban events', e);
+  }
+
+  // Cloud Run / server authoritative update
+  cloudRunBanUser(record.username || username, banType, durationHours, record.banReason, record.bannedBy);
+
+  return {
+    success: true,
+    user: {
+      username: record.username || username,
+      name: record.name,
+      email: record.email,
+      createdAt: record.createdAt,
+      lastLogin: record.lastLogin,
+      isAdmin: false,
+      isVip: record.isVip,
+      vipLevel: record.vipLevel,
+      points: record.points ?? 10,
+      isBanned: true,
+      banType,
+      banReason: record.banReason,
+      bannedAt: record.bannedAt,
+      banExpiresAt,
+      bannedBy: record.bannedBy,
+    },
+  };
+}
+
+export function unbanUserAccount(username: string, adminUsername?: string): { success: boolean; error?: string } {
+  const lowerKey = username.trim().toLowerCase();
+  const users = getStoredUsers();
+  const record = users[lowerKey];
+  if (!record) {
+    return { success: false, error: `User account "${username}" not found.` };
+  }
+
+  delete record.isBanned;
+  delete record.banType;
+  delete record.banReason;
+  delete record.bannedAt;
+  delete record.banExpiresAt;
+  delete record.bannedBy;
+
+  saveUsers(users);
+
+  const currentSession = getCurrentSessionUser();
+  if (currentSession && currentSession.username.toLowerCase() === lowerKey) {
+    const updated = { ...currentSession };
+    delete updated.isBanned;
+    delete updated.banType;
+    delete updated.banReason;
+    delete updated.bannedAt;
+    delete updated.banExpiresAt;
+    delete updated.bannedBy;
+    setCurrentSessionUser(updated);
+  }
+
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gameland_user_unbanned', { detail: { username: lowerKey } }));
+      window.dispatchEvent(new Event('gameland_users_updated'));
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('gameland_security_broadcast');
+        bc.postMessage({
+          type: 'USER_UNBANNED',
+          username: lowerKey,
+        });
+        bc.close();
+      }
+    }
+  } catch (e) {
+    console.error('Failed to dispatch unban events', e);
+  }
+
+  cloudRunUnbanUser(record.username || username, adminUsername);
+
+  return { success: true };
 }
 
 export function updateUserPassword(username: string, newPassword: string): boolean {
@@ -1715,6 +1964,42 @@ export function awardGamePoints(
   username?: string,
   baseAmount: number = 1
 ): { earned: number; totalPoints: number; multiplier: number; user: UserAccount | null; dailyCapReached?: boolean } {
+  // Strict: Any banned session cannot earn points under any circumstance
+  const currentSession = getCurrentSessionUser();
+  if (
+    currentSession &&
+    isUserCurrentlyBanned(currentSession) &&
+    (currentSession.banType === 'full' || currentSession.banType === 'temporary' || !currentSession.banType)
+  ) {
+    return {
+      earned: 0,
+      totalPoints: currentSession.points ?? 0,
+      multiplier: 1,
+      user: currentSession,
+      dailyCapReached: true,
+    };
+  }
+
+  // Also verify targeted username against database
+  if (username) {
+    const users = getStoredUsers();
+    const key = username.toLowerCase();
+    const record = users[key];
+    if (
+      record &&
+      isUserCurrentlyBanned(record) &&
+      (record.banType === 'full' || record.banType === 'temporary' || !record.banType)
+    ) {
+      return {
+        earned: 0,
+        totalPoints: record.points ?? 0,
+        multiplier: 1,
+        user: currentSession,
+        dailyCapReached: true,
+      };
+    }
+  }
+
   const MAX_DAILY_POINTS = 10;
   let multiplier = 1.0;
   let activeUser: UserAccount | null = null;
@@ -1742,6 +2027,15 @@ export function awardGamePoints(
     const session = getCurrentSessionUser();
 
     if (record) {
+      if (isUserCurrentlyBanned(record)) {
+        return {
+          earned: 0,
+          totalPoints: record.points ?? 0,
+          multiplier: 1,
+          user: session,
+          dailyCapReached: true,
+        };
+      }
       const currentLevel = record.vipLevel || 'Gold';
       if (record.isAdmin || username.toLowerCase() === 'pebblesthepenguinishaany83') {
         multiplier = 2.5;

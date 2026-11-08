@@ -11,6 +11,7 @@ import {
   addRecentlyPlayedId,
   incrementPlayCount,
   getSiteAnnouncement,
+  addContactSubmission,
 } from './data/gamesData';
 import { trackGamePlay } from './utils/analytics';
 import { Header } from './components/Header';
@@ -32,7 +33,16 @@ import { DisguiseOverlay } from './components/DisguiseOverlay';
 import { ComingSoonSection } from './components/ComingSoonSection';
 import { getPanicSettings, applyTabMask, triggerPanicRedirect } from './utils/panicSettings';
 import { AuthEntry } from './components/AuthEntry';
-import { getCurrentSessionUser, logoutAccount, processDailyLoginStreak, UserAccount, awardGamePoints, syncUsersWithServer } from './utils/auth';
+import {
+  getCurrentSessionUser,
+  logoutAccount,
+  processDailyLoginStreak,
+  UserAccount,
+  awardGamePoints,
+  syncUsersWithServer,
+  isUserCurrentlyBanned,
+  formatBanDurationRemaining,
+} from './utils/auth';
 import { recordFavoritesChange, evaluateTrophies } from './utils/trophies';
 import { PenguinMascot } from './components/PenguinMascot';
 import { SnowfallEffect } from './components/SnowfallEffect';
@@ -47,6 +57,11 @@ import {
   Snowflake,
   ShieldCheck,
   X,
+  Ban,
+  ShieldAlert,
+  Timer,
+  LogOut,
+  MessageSquare,
 } from 'lucide-react';
 
 export default function App() {
@@ -80,7 +95,40 @@ export default function App() {
   } | null>(null);
   const [announcement, setAnnouncement] = useState<{ message: string; active: boolean }>({ message: '', active: false });
 
+  const [appealText, setAppealText] = useState('');
+  const [appealStatus, setAppealStatus] = useState<string | null>(null);
+  const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false);
+  const [showAppealForm, setShowAppealForm] = useState(false);
+
+  const handleSubmitBanAppeal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appealText.trim() || !currentUser) return;
+    setIsSubmittingAppeal(true);
+    addContactSubmission({
+      name: currentUser.name || currentUser.username,
+      email: currentUser.email || 'ishaany83@gmail.com',
+      subject: `[BAN APPEAL] User @${currentUser.username} (${currentUser.banType || 'Ban'})`,
+      message: `Account: @${currentUser.username}\nBan Type: ${currentUser.banType}\nOriginal Ban Reason: ${currentUser.banReason}\nAppeal Message:\n${appealText.trim()}`,
+    });
+    setTimeout(() => {
+      setIsSubmittingAppeal(false);
+      setAppealStatus('Appeal submitted successfully! An administrator will review your case.');
+      setAppealText('');
+    }, 400);
+  };
+
   const isVipUser = !!(currentUser?.isVip || currentUser?.isAdmin);
+  const isBannedLockout = !!(
+    currentUser &&
+    isUserCurrentlyBanned(currentUser) &&
+    (currentUser.banType === 'full' || currentUser.banType === 'temporary' || !currentUser.banType)
+  );
+
+  useEffect(() => {
+    if (isBannedLockout && selectedGame) {
+      setSelectedGame(null);
+    }
+  }, [isBannedLockout, selectedGame]);
 
   const [filterState, setFilterState] = useState<FilterState>({
     searchQuery: '',
@@ -96,7 +144,11 @@ export default function App() {
     if (active) {
       const { user: processed } = processDailyLoginStreak(active);
       setCurrentUser(processed);
-      evaluateTrophies(processed.username);
+      if (isUserCurrentlyBanned(processed) && (processed.banType === 'full' || processed.banType === 'temporary' || !processed.banType)) {
+        setSelectedGame(null);
+      } else {
+        evaluateTrophies(processed.username);
+      }
     } else {
       setCurrentUser(null);
     }
@@ -166,6 +218,78 @@ export default function App() {
       });
     };
 
+    // Real-time Ban & Session Lockout Synchronization
+    const handleImmediateLockout = () => {
+      const updatedUser = getCurrentSessionUser();
+      setCurrentUser(updatedUser);
+      if (
+        updatedUser &&
+        isUserCurrentlyBanned(updatedUser) &&
+        (updatedUser.banType === 'full' || updatedUser.banType === 'temporary' || !updatedUser.banType)
+      ) {
+        setSelectedGame(null);
+        setIsProfileModalOpen(false);
+        setIsStoreModalOpen(false);
+        setIsVipLoungeOpen(false);
+        setIsSuggestModalOpen(false);
+        setIsStatusModalOpen(false);
+        setIsTermsModalOpen(false);
+        setIsContactModalOpen(false);
+        setIsAdminModalOpen(false);
+      }
+    };
+
+    const handleUsersUpdated = () => {
+      const updatedUser = getCurrentSessionUser();
+      setCurrentUser(updatedUser);
+      if (
+        updatedUser &&
+        isUserCurrentlyBanned(updatedUser) &&
+        (updatedUser.banType === 'full' || updatedUser.banType === 'temporary' || !updatedUser.banType)
+      ) {
+        setSelectedGame(null);
+      }
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'gameland_users_db_v1' || e.key === 'gameland_active_session_v1' || !e.key) {
+        handleImmediateLockout();
+      }
+    };
+
+    window.addEventListener('gameland_session_banned', handleImmediateLockout);
+    window.addEventListener('gameland_user_banned', handleImmediateLockout);
+    window.addEventListener('gameland_users_updated', handleUsersUpdated);
+    window.addEventListener('storage', handleStorageChange);
+
+    // Cross-tab BroadcastChannel listener for instant ban enforcement across tabs
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        bc = new BroadcastChannel('gameland_security_broadcast');
+        bc.onmessage = (msg) => {
+          if (msg.data?.type === 'USER_BANNED' || msg.data?.type === 'USER_UNBANNED') {
+            handleImmediateLockout();
+          }
+        };
+      } catch (err) {
+        console.warn('BroadcastChannel error', err);
+      }
+    }
+
+    // Active heartbeat check every 1.5 seconds to guarantee instant ban enforcement even if events are missed
+    const banHeartbeatInterval = setInterval(() => {
+      const activeUser = getCurrentSessionUser();
+      if (
+        activeUser &&
+        isUserCurrentlyBanned(activeUser) &&
+        (activeUser.banType === 'full' || activeUser.banType === 'temporary' || !activeUser.banType)
+      ) {
+        setSelectedGame(null);
+        setCurrentUser(activeUser);
+      }
+    }, 1500);
+
     window.addEventListener('gameland_session_coins_updated', handleSessionCoinsUpdated);
     window.addEventListener('gameland_session_vip_updated', handleSessionVipUpdated);
     window.addEventListener('gameland_mass_coins_granted', handleMassCoinsGranted);
@@ -176,6 +300,14 @@ export default function App() {
     window.addEventListener('keydown', handleGlobalKeyDown, { capture: true });
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true });
+      window.removeEventListener('gameland_session_banned', handleImmediateLockout);
+      window.removeEventListener('gameland_user_banned', handleImmediateLockout);
+      window.removeEventListener('gameland_users_updated', handleUsersUpdated);
+      window.removeEventListener('storage', handleStorageChange);
+      if (bc) {
+        bc.close();
+      }
+      clearInterval(banHeartbeatInterval);
       window.removeEventListener('gameland_session_coins_updated', handleSessionCoinsUpdated);
       window.removeEventListener('gameland_session_vip_updated', handleSessionVipUpdated);
       window.removeEventListener('gameland_mass_coins_granted', handleMassCoinsGranted);
@@ -198,6 +330,18 @@ export default function App() {
 
   // Select Game to Play
   const handleSelectGame = (game: Game) => {
+    const freshUser = getCurrentSessionUser() || currentUser;
+    if (
+      freshUser &&
+      isUserCurrentlyBanned(freshUser) &&
+      (freshUser.banType === 'full' || freshUser.banType === 'temporary' || !freshUser.banType)
+    ) {
+      setSelectedGame(null);
+      setCurrentUser(freshUser);
+      alert(`⛔ Account Suspended: Your account is currently restricted. You cannot launch or play games.`);
+      return;
+    }
+
     if (game.isVipExclusive && !isVipUser) {
       setVipLockedModalData({ game, itemName: game.title, requiredTier: game.vipLevel || 'Gold' });
       return;
@@ -217,18 +361,29 @@ export default function App() {
     if (ptsResult.user) {
       setCurrentUser(ptsResult.user);
     }
-    setPointsBanner({
-      earned: ptsResult.earned,
-      total: ptsResult.totalPoints,
-      multiplier: ptsResult.multiplier,
-      title: game.title,
-    });
+    if (ptsResult.earned > 0) {
+      setPointsBanner({
+        earned: ptsResult.earned,
+        total: ptsResult.totalPoints,
+        multiplier: ptsResult.multiplier,
+        title: game.title,
+      });
+    }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Random Game Selection
   const handleRandomGame = () => {
+    const freshUser = getCurrentSessionUser() || currentUser;
+    if (
+      freshUser &&
+      isUserCurrentlyBanned(freshUser) &&
+      (freshUser.banType === 'full' || freshUser.banType === 'temporary' || !freshUser.banType)
+    ) {
+      setSelectedGame(null);
+      return;
+    }
     if (games.length === 0) return;
     const randomIndex = Math.floor(Math.random() * games.length);
     handleSelectGame(games[randomIndex]);
@@ -856,6 +1011,124 @@ export default function App() {
           })
         }
       />
+
+      {/* Account Suspended / Banned Full-Screen Lockout Modal */}
+      {isBannedLockout && (
+        <div className="fixed inset-0 z-[99999] bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-300">
+          <div className="bg-slate-900 border-2 border-rose-500/70 rounded-3xl w-full max-w-lg shadow-2xl shadow-rose-950/80 overflow-hidden text-center p-6 sm:p-8 space-y-6 relative my-8">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-56 h-56 bg-rose-500/20 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative mx-auto w-20 h-20 rounded-3xl bg-rose-500/20 border-2 border-rose-500/60 flex items-center justify-center text-rose-400 shadow-xl shadow-rose-500/30 animate-pulse">
+              <Ban className="w-10 h-10" />
+            </div>
+
+            <div className="space-y-2 relative z-10">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[11px] font-black uppercase tracking-wider">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>{currentUser?.banType === 'temporary' ? 'Temporary Suspension' : 'Account Suspended'}</span>
+              </div>
+              <h2 className="text-2xl font-black text-white tracking-tight">Access Restricted</h2>
+              <p className="text-xs text-rose-300/90 leading-relaxed max-w-md mx-auto">
+                Your GameLand account <span className="font-bold text-white">@{currentUser?.username}</span> has been restricted by an administrator. You cannot launch games, earn arcade points, or access platform features while suspended.
+              </p>
+            </div>
+
+            {/* Ban Details Card */}
+            <div className="p-4 rounded-2xl bg-slate-950/90 border border-rose-500/30 text-left space-y-3 relative z-10 text-xs">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Reason for Restriction</span>
+                <p className="text-xs font-semibold text-rose-200 mt-1 bg-rose-950/40 p-2.5 rounded-xl border border-rose-900/50">
+                  "{currentUser?.banReason || 'Violation of GameLand Community Guidelines & Rules'}"
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Duration</span>
+                  <span className="text-xs font-mono font-extrabold text-amber-400 flex items-center gap-1 mt-1">
+                    <Timer className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{formatBanDurationRemaining(currentUser?.banExpiresAt)}</span>
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Expires On</span>
+                  <span className="text-xs font-semibold text-slate-300 block mt-1">
+                    {currentUser?.banExpiresAt ? new Date(currentUser.banExpiresAt).toLocaleString() : 'Permanent / Indefinite'}
+                  </span>
+                </div>
+              </div>
+
+              {currentUser?.bannedBy && (
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Issued by Moderator:</span>
+                  <span className="font-bold text-slate-200">{currentUser.bannedBy}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Appeal Form */}
+            {showAppealForm ? (
+              <form onSubmit={handleSubmitBanAppeal} className="space-y-3 relative z-10 text-left">
+                <label className="text-[11px] font-bold text-slate-300 block">
+                  Explain why this restriction should be reviewed:
+                </label>
+                <textarea
+                  value={appealText}
+                  onChange={(e) => setAppealText(e.target.value)}
+                  placeholder="Provide details or explain what happened..."
+                  rows={3}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 resize-none"
+                  required
+                />
+                {appealStatus && (
+                  <p className="text-xs text-emerald-400 font-bold bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-800">
+                    {appealStatus}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={isSubmittingAppeal || !appealText.trim()}
+                    className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmittingAppeal ? 'Sending Appeal...' : 'Submit Appeal to Admin'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAppealForm(false)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : null}
+
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-2 relative z-10">
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black text-xs transition-all shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Log Out & Switch Account</span>
+              </button>
+
+              {!showAppealForm && (
+                <button
+                  type="button"
+                  onClick={() => setShowAppealForm(true)}
+                  className="w-full py-2.5 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-slate-700"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Submit Ban Appeal to Admin</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

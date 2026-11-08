@@ -446,9 +446,20 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
 
           {/* Feedback Banners */}
           {errorMessage && (
-            <div className="mb-5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-medium flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
+            <div className={`mb-5 p-4 rounded-2xl border text-xs leading-relaxed flex items-start gap-3 shadow-lg ${
+              errorMessage.includes('⛔') || errorMessage.toLowerCase().includes('banned') || errorMessage.toLowerCase().includes('suspension')
+                ? 'bg-gradient-to-r from-rose-950/70 to-slate-900 border-rose-500/50 text-rose-200 shadow-rose-950/40 ring-1 ring-rose-500/30'
+                : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+            }`}>
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-semibold block">{errorMessage}</span>
+                {(errorMessage.includes('⛔') || errorMessage.toLowerCase().includes('banned')) && (
+                  <span className="text-[11px] text-rose-300/80 block mt-1 font-normal">
+                    If you believe this penalty was applied by mistake or wish to appeal, contact the administrator via the Contact tab or support desk.
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
