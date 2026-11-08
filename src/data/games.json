@@ -643,7 +643,7 @@
     "title": "Run from the Robot",
     "slug": "run-from-the-robot",
     "category": "Arcade",
-    "description": "A Scratch game. Click the green flag to start and follow the on-screen instructions. How to play collect the energy balls to get better cat score. do not run into the robot or you will be eliminated out of the round! when the robot collects the ball it gets faster every time it collects the ball and will get harder as it continues!",
+    "description": "A Scratch game. Click the green flag to start and follow the on-screen instructions. How to play collect the energy balls to get better cat score. do not run into the robot or hit the black spikes when trying to get the energy balls.",
     "thumbnailUrl": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=600",
     "embedUrl": "https://scratch.mit.edu/projects/1291152819/embed",
     "embedType": "iframe",
@@ -655,13 +655,13 @@
     ],
     "author": "Scratch Community",
     "isNew": true
-  }
-    {
+  },
+  {
     "id": "minecraft-v1.26",
     "title": "Minecraft v1.26",
     "slug": "minecraft-v1.26",
     "category": "Survival",
-    "description": "Sandbox voxel mining, crafting, block building, and infinite survival in your browser. This is the latest version of Minecraft, featuring new blocks, mobs, and gameplay mechanics. Explore vast worlds, build structures, and survive against hostile creatures. Once you load the game it is ready to play, no installation required. Enjoy the classic Minecraft experience directly in your web browser.",
+    "description": "Sandbox voxel mining, crafting, block building, and infinite survival in your browser. This is the latest version of Minecraft, featuring new blocks, mobs, and gameplay mechanics.",
     "thumbnailUrl": "https://images.unsplash.com/photo-1627856013091-fed6e4e30025?auto=format&fit=crop&q=80&w=600",
     "embedUrl": "https://penguin-tech2.github.io/eaglercraft-v26.2/",
     "embedType": "iframe",
@@ -669,25 +669,25 @@
     "rating": 4.9,
     "playCount": 41200,
     "controls": [
-  { "key": "WASD", "action": "Move (Forward, Left, Backward, Right)" },
-  { "key": "Space", "action": "Jump (Double-tap in Creative to fly)" },
-  { "key": "Shift", "action": "Sneak / Fly down" },
-  { "key": "R / Ctrl", "action": "Sprint" },
-  { "key": "Left Click", "action": "Attack / Destroy Block" },
-  { "key": "Right Click", "action": "Use Item / Place Block" },
-  { "key": "Middle Click", "action": "Pick Block" },
-  { "key": "E", "action": "Open Inventory" },
-  { "key": "Q", "action": "Drop Item" },
-  { "key": "1-9", "action": "Select Hotbar Slot" },
-  { "key": "C", "action": "Zoom View" },
-  { "key": "M", "action": "Cinema View" },
-  { "key": "F1", "action": "Toggle HUD Interface" },
-  { "key": "F5", "action": "Toggle Perspective" },
-  { "key": "T / /", "action": "Open Chat / Commands" },
-  { "key": "` / ESC", "action": "Open Pause Menu" }
+      { "key": "WASD", "action": "Move (Forward, Left, Backward, Right)" },
+      { "key": "Space", "action": "Jump (Double-tap in Creative to fly)" },
+      { "key": "Shift", "action": "Sneak / Fly down" },
+      { "key": "R / Ctrl", "action": "Sprint" },
+      { "key": "Left Click", "action": "Attack / Destroy Block" },
+      { "key": "Right Click", "action": "Use Item / Place Block" },
+      { "key": "Middle Click", "action": "Pick Block" },
+      { "key": "E", "action": "Open Inventory" },
+      { "key": "Q", "action": "Drop Item" },
+      { "key": "1-9", "action": "Select Hotbar Slot" },
+      { "key": "C", "action": "Zoom View" },
+      { "key": "M", "action": "Cinema View" },
+      { "key": "F1", "action": "Toggle HUD Interface" },
+      { "key": "F5", "action": "Toggle Perspective" },
+      { "key": "T / /", "action": "Open Chat / Commands" },
+      { "key": "` / ESC", "action": "Open Pause Menu" }
     ],
     "author": "Minecraft Web Edition",
     "isPopular": true,
     "isFeatured": true
-  },
+  }
 ]
