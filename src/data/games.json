@@ -656,4 +656,38 @@
     "author": "Scratch Community",
     "isNew": true
   }
+    {
+    "id": "minecraft-v1.26",
+    "title": "Minecraft v1.26",
+    "slug": "minecraft-v1.26",
+    "category": "Survival",
+    "description": "Sandbox voxel mining, crafting, block building, and infinite survival in your browser. This is the latest version of Minecraft, featuring new blocks, mobs, and gameplay mechanics. Explore vast worlds, build structures, and survive against hostile creatures. Once you load the game it is ready to play, no installation required. Enjoy the classic Minecraft experience directly in your web browser.",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1627856013091-fed6e4e30025?auto=format&fit=crop&q=80&w=600",
+    "embedUrl": "https://penguincodingforeducationallearning.github.io/Minecraft/",
+    "embedType": "iframe",
+    "tags": ["minecraft", "sandbox", "building", "survival", "crafting", "popular"],
+    "rating": 4.9,
+    "playCount": 41200,
+    "controls": [
+  { "key": "WASD", "action": "Move (Forward, Left, Backward, Right)" },
+  { "key": "Space", "action": "Jump (Double-tap in Creative to fly)" },
+  { "key": "Shift", "action": "Sneak / Fly down" },
+  { "key": "R / Ctrl", "action": "Sprint" },
+  { "key": "Left Click", "action": "Attack / Destroy Block" },
+  { "key": "Right Click", "action": "Use Item / Place Block" },
+  { "key": "Middle Click", "action": "Pick Block" },
+  { "key": "E", "action": "Open Inventory" },
+  { "key": "Q", "action": "Drop Item" },
+  { "key": "1-9", "action": "Select Hotbar Slot" },
+  { "key": "C", "action": "Zoom View" },
+  { "key": "M", "action": "Cinema View" },
+  { "key": "F1", "action": "Toggle HUD Interface" },
+  { "key": "F5", "action": "Toggle Perspective" },
+  { "key": "T / /", "action": "Open Chat / Commands" },
+  { "key": "` / ESC", "action": "Open Pause Menu" }
+    ],
+    "author": "Minecraft Web Edition",
+    "isPopular": true,
+    "isFeatured": true
+  },
 ]
