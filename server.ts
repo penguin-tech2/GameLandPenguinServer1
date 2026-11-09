@@ -630,6 +630,27 @@ app.post('/api/users/:username/ban', (req, res) => {
   });
 });
 
+// Check Single User Ban Status Endpoint
+app.get('/api/users/:username/ban-status', (req, res) => {
+  const username = (req.params.username || '').toLowerCase();
+  const record = serverUsersStore[username];
+  if (!record) {
+    return res.json({ isBanned: false });
+  }
+
+  const isStillBanned =
+    Boolean(record.isBanned) &&
+    (!record.banExpiresAt || new Date(record.banExpiresAt).getTime() > Date.now());
+
+  return res.json({
+    isBanned: isStillBanned,
+    banType: record.banType || 'full',
+    banReason: record.banReason || 'Violation of GameLand Community Guidelines',
+    banExpiresAt: record.banExpiresAt || null,
+    bannedBy: record.bannedBy || 'Admin',
+  });
+});
+
 // Unban User Endpoint
 app.post('/api/users/:username/unban', (req, res) => {
   const username = (req.params.username || '').toLowerCase();

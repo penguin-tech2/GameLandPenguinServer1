@@ -42,6 +42,7 @@ import {
   syncUsersWithServer,
   isUserCurrentlyBanned,
   formatBanDurationRemaining,
+  checkServerBanStatus,
 } from './utils/auth';
 import { recordFavoritesChange, evaluateTrophies } from './utils/trophies';
 import { PenguinMascot } from './components/PenguinMascot';
@@ -277,8 +278,10 @@ export default function App() {
       }
     }
 
-    // Active heartbeat check every 1.5 seconds to guarantee instant ban enforcement even if events are missed
-    const banHeartbeatInterval = setInterval(() => {
+    // Active heartbeat check every 500ms to guarantee near-instant ban enforcement across all open browser tabs
+    let heartbeatTick = 0;
+    const banHeartbeatInterval = setInterval(async () => {
+      heartbeatTick++;
       const activeUser = getCurrentSessionUser();
       if (
         activeUser &&
@@ -287,8 +290,18 @@ export default function App() {
       ) {
         setSelectedGame(null);
         setCurrentUser(activeUser);
+      } else if (activeUser && activeUser.username && heartbeatTick % 4 === 0) {
+        // Every 2.0s, cross-check authoritative backend server in case the ban was applied from another browser, incognito tab, or device
+        try {
+          const isBannedOnServer = await checkServerBanStatus(activeUser.username);
+          if (isBannedOnServer) {
+            handleImmediateLockout();
+          }
+        } catch {
+          // ignore network hiccups
+        }
       }
-    }, 1500);
+    }, 500);
 
     window.addEventListener('gameland_session_coins_updated', handleSessionCoinsUpdated);
     window.addEventListener('gameland_session_vip_updated', handleSessionVipUpdated);
@@ -329,7 +342,7 @@ export default function App() {
   };
 
   // Select Game to Play
-  const handleSelectGame = (game: Game) => {
+  const handleSelectGame = async (game: Game) => {
     const freshUser = getCurrentSessionUser() || currentUser;
     if (
       freshUser &&
@@ -340,6 +353,21 @@ export default function App() {
       setCurrentUser(freshUser);
       alert(`⛔ Account Suspended: Your account is currently restricted. You cannot launch or play games.`);
       return;
+    }
+
+    if (freshUser?.username) {
+      try {
+        const isBannedOnServer = await checkServerBanStatus(freshUser.username);
+        if (isBannedOnServer) {
+          setSelectedGame(null);
+          const updated = getCurrentSessionUser();
+          if (updated) setCurrentUser(updated);
+          alert(`⛔ Account Suspended: Your account has been restricted by an administrator. You cannot launch or play games.`);
+          return;
+        }
+      } catch {
+        // Fallback to local ban state
+      }
     }
 
     if (game.isVipExclusive && !isVipUser) {
@@ -374,7 +402,7 @@ export default function App() {
   };
 
   // Random Game Selection
-  const handleRandomGame = () => {
+  const handleRandomGame = async () => {
     const freshUser = getCurrentSessionUser() || currentUser;
     if (
       freshUser &&
@@ -383,6 +411,17 @@ export default function App() {
     ) {
       setSelectedGame(null);
       return;
+    }
+    if (freshUser?.username) {
+      try {
+        const isBannedOnServer = await checkServerBanStatus(freshUser.username);
+        if (isBannedOnServer) {
+          setSelectedGame(null);
+          return;
+        }
+      } catch {
+        // Fallback to local ban state
+      }
     }
     if (games.length === 0) return;
     const randomIndex = Math.floor(Math.random() * games.length);

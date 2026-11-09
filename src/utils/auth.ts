@@ -10,7 +10,10 @@ import {
   cloudRunPromoteAllVip,
   cloudRunBanUser,
   cloudRunUnbanUser,
+  checkServerBanStatus,
 } from './socketClient';
+
+export { checkServerBanStatus };
 import {
   encryptPassword,
   isPasswordEncrypted,

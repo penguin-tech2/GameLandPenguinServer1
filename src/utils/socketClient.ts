@@ -150,21 +150,23 @@ if (typeof window !== 'undefined') {
           const lowerKey = data.username.toLowerCase();
           const raw = localStorage.getItem(USERS_STORAGE_KEY);
           const existing = raw ? JSON.parse(raw) : {};
-          if (existing[lowerKey]) {
-            existing[lowerKey].isBanned = true;
-            existing[lowerKey].banType = data.banType;
-            existing[lowerKey].banReason = data.banReason;
-            existing[lowerKey].banExpiresAt = data.banExpiresAt;
-            existing[lowerKey].bannedBy = data.bannedBy;
-            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(existing));
-          }
+          existing[lowerKey] = {
+            ...(existing[lowerKey] || {}),
+            username: data.username,
+            isBanned: true,
+            banType: data.banType || 'full',
+            banReason: data.banReason,
+            banExpiresAt: data.banExpiresAt,
+            bannedBy: data.bannedBy,
+          };
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(existing));
 
           const sessionRaw = localStorage.getItem('gameland_active_session_v1') || localStorage.getItem('gameland_current_session_user_v1');
           if (sessionRaw) {
             const session = JSON.parse(sessionRaw);
             if (session && session.username && session.username.toLowerCase() === lowerKey) {
               session.isBanned = true;
-              session.banType = data.banType;
+              session.banType = data.banType || 'full';
               session.banReason = data.banReason;
               session.banExpiresAt = data.banExpiresAt;
               session.bannedBy = data.bannedBy;
@@ -429,3 +431,52 @@ export async function cloudRunUnbanUser(
     return { success: false, error: err.message || 'Network error' };
   }
 }
+
+// Authoritative real-time check of ban status against Cloud Run backend
+export async function checkServerBanStatus(username: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !username) return false;
+  const backend = getEffectiveBackendUrl();
+  try {
+    const res = await fetch(`${backend}/api/users/${encodeURIComponent(username.toLowerCase())}/ban-status`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.isBanned) {
+        const raw = localStorage.getItem(USERS_STORAGE_KEY);
+        const existing = raw ? JSON.parse(raw) : {};
+        const lowerKey = username.toLowerCase();
+        existing[lowerKey] = {
+          ...(existing[lowerKey] || {}),
+          username,
+          isBanned: true,
+          banType: data.banType || 'full',
+          banReason: data.banReason,
+          banExpiresAt: data.banExpiresAt,
+          bannedBy: data.bannedBy,
+        };
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(existing));
+
+        const sessionRaw = localStorage.getItem('gameland_active_session_v1') || localStorage.getItem('gameland_current_session_user_v1');
+        if (sessionRaw) {
+          const session = JSON.parse(sessionRaw);
+          if (session && session.username && session.username.toLowerCase() === lowerKey) {
+            session.isBanned = true;
+            session.banType = data.banType || 'full';
+            session.banReason = data.banReason;
+            session.banExpiresAt = data.banExpiresAt;
+            session.bannedBy = data.bannedBy;
+            localStorage.setItem('gameland_active_session_v1', JSON.stringify(session));
+            localStorage.setItem('gameland_current_session_user_v1', JSON.stringify(session));
+          }
+        }
+        window.dispatchEvent(new CustomEvent('gameland_session_banned', { detail: data }));
+        window.dispatchEvent(new CustomEvent('gameland_user_banned', { detail: data }));
+        window.dispatchEvent(new CustomEvent('gameland_users_updated', { detail: existing }));
+        return true;
+      }
+    }
+  } catch {
+    // Network fallback
+  }
+  return false;
+}
+
