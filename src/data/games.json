@@ -643,7 +643,7 @@
     "title": "Run from the Robot",
     "slug": "run-from-the-robot",
     "category": "Arcade",
-    "description": "A Scratch game. Click the green flag to start and follow the on-screen instructions. How to play collect the energy balls to get better cat score. do not run into the robot or hit the black spikes when trying to get the energy balls.",
+    "description": "A Scratch game. Click the green flag to start and follow the on-screen instructions. How to play collect the energy balls to get better cat score. do not run into the robot or hit...",
     "thumbnailUrl": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=600",
     "embedUrl": "https://scratch.mit.edu/projects/1291152819/embed",
     "embedType": "iframe",
@@ -689,5 +689,25 @@
     "author": "Minecraft Web Edition",
     "isPopular": true,
     "isFeatured": true
+  },
+  {
+    "id": "subway-surfers",
+    "title": "Subway Surfers",
+    "slug": "subway-surfers",
+    "category": "Arcade",
+    "description": "Dash across subway tracks, dodge trains, collect coins, and survive the endless rush.",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80&w=600",
+    "embedUrl": "https://penguin-tech2.github.io/subwaysurfers/",
+    "embedType": "iframe",
+    "tags": ["runner", "subway", "arcade", "endless", "popular"],
+    "rating": 4.8,
+    "playCount": 0,
+    "controls": [
+      { "key": "Arrow Keys / A & D", "action": "Move Left / Right" },
+      { "key": "Space / Up", "action": "Jump" },
+      { "key": "Down", "action": "Slide" }
+    ],
+    "author": "Subway Surfers Web",
+    "isNew": true
   }
 ]
