@@ -107,14 +107,6 @@ export const LeaderboardSection: React.FC<LeaderboardSectionProps> = ({ game, cu
       return;
     }
 
-    if (currentUser?.isBanned && (currentUser.banType === 'leaderboard' || currentUser.banType === 'full' || currentUser.banType === 'temporary')) {
-      setFeedbackMsg({
-        text: `🚫 Leaderboard Submission Blocked: Your account has an active ${currentUser.banType === 'leaderboard' ? 'Leaderboard Ban' : 'Account Suspension'} (${currentUser.banReason || 'Community rule violation'}).`,
-        isError: true,
-      });
-      return;
-    }
-
     setIsSubmitting(true);
 
     setTimeout(() => {

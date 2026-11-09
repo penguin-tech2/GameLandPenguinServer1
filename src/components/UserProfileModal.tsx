@@ -29,7 +29,6 @@ import {
   Camera,
   AlertCircle,
   Link as LinkIcon,
-  Ban,
 } from 'lucide-react';
 import { UserAccount, updateUserAvatar, simulateNextDayLoginStreak, setActiveProfileFrame, MYSTERY_GIFT_POOLS, MysteryGiftItem, getUserPoints } from '../utils/auth';
 import { PENGUIN_AVATARS, getAvatarById } from '../utils/penguinAvatars';
@@ -334,12 +333,6 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black tracking-wider uppercase flex items-center gap-1">
                       <ShieldCheck className="w-3 h-3 text-amber-400" />
                       ADMIN
-                    </span>
-                  )}
-                  {currentUser.isBanned && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/25 text-rose-300 border border-rose-500/50 font-black tracking-wider uppercase flex items-center gap-1 shadow-xs">
-                      <Ban className="w-3 h-3 text-rose-400" />
-                      <span>{currentUser.banType ? `RESTRICTED: ${currentUser.banType}` : 'ACCOUNT BANNED'}</span>
                     </span>
                   )}
                   {currentUser.isVip && (

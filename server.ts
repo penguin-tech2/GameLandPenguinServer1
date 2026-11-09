@@ -313,31 +313,6 @@ app.post('/api/users/login', (req, res) => {
     return res.status(401).json({ success: false, error: 'Incorrect password. Please try again.' });
   }
 
-  // Check active ban status
-  if (record.isBanned) {
-    const isStillBanned = !record.banExpiresAt || new Date(record.banExpiresAt).getTime() > Date.now();
-    if (isStillBanned) {
-      if (!record.banType || record.banType === 'full' || record.banType === 'temporary') {
-        const remaining = record.banExpiresAt
-          ? `Expires on ${new Date(record.banExpiresAt).toLocaleString()}`
-          : 'Permanent Ban';
-        const banTypeLabel = record.banType === 'temporary' ? 'Temporary Suspension' : 'Account Ban';
-        return res.status(403).json({
-          success: false,
-          error: `⛔ ${banTypeLabel}: This account has been banned. Reason: "${record.banReason || 'Violation of Community Rules'}". Duration: ${remaining}.`,
-        });
-      }
-    } else {
-      // Temporary ban has naturally expired, clear it
-      delete record.isBanned;
-      delete record.banType;
-      delete record.banReason;
-      delete record.bannedAt;
-      delete record.banExpiresAt;
-      delete record.bannedBy;
-    }
-  }
-
   const now = new Date().toISOString();
   record.lastLogin = now;
   savePersistedUsers(false);
@@ -578,102 +553,6 @@ app.post('/api/users/promote-all-vip', (req, res) => {
   io.emit('users:synced_all', serverUsersStore);
 
   return res.json({ success: true, count, vipLevel });
-});
-
-// Ban User Endpoint
-app.post('/api/users/:username/ban', (req, res) => {
-  const username = (req.params.username || '').toLowerCase();
-  const { banType = 'full', durationHours = null, reason = 'Rule violation', adminUsername = 'Admin' } = req.body;
-
-  if (username === 'pebblesthepenguinishaany83') {
-    return res.status(403).json({ success: false, error: 'The primary owner administrator account cannot be banned.' });
-  }
-
-  const record = serverUsersStore[username];
-  if (!record) {
-    return res.status(404).json({ success: false, error: 'User account not found.' });
-  }
-
-  const now = new Date();
-  const banExpiresAt =
-    durationHours !== null && durationHours !== undefined && Number(durationHours) > 0
-      ? new Date(now.getTime() + Number(durationHours) * 3600 * 1000).toISOString()
-      : null;
-
-  record.isBanned = true;
-  record.banType = banType;
-  record.banReason = String(reason).trim() || 'Violation of GameLand Community Guidelines';
-  record.bannedAt = now.toISOString();
-  record.banExpiresAt = banExpiresAt;
-  record.bannedBy = adminUsername;
-  if (record.isAdmin) {
-    record.isAdmin = false;
-  }
-
-  savePersistedUsers();
-
-  console.log(`🚫 User "${username}" banned: type=${banType}, durationHours=${durationHours}, expires=${banExpiresAt}, reason="${record.banReason}" by ${adminUsername}`);
-
-  io.emit('user:banned', {
-    username,
-    isBanned: true,
-    banType: record.banType,
-    banReason: record.banReason,
-    banExpiresAt: record.banExpiresAt,
-    bannedBy: record.bannedBy,
-  });
-  io.emit('users:synced_all', serverUsersStore);
-
-  return res.json({
-    success: true,
-    user: record,
-  });
-});
-
-// Check Single User Ban Status Endpoint
-app.get('/api/users/:username/ban-status', (req, res) => {
-  const username = (req.params.username || '').toLowerCase();
-  const record = serverUsersStore[username];
-  if (!record) {
-    return res.json({ isBanned: false });
-  }
-
-  const isStillBanned =
-    Boolean(record.isBanned) &&
-    (!record.banExpiresAt || new Date(record.banExpiresAt).getTime() > Date.now());
-
-  return res.json({
-    isBanned: isStillBanned,
-    banType: record.banType || 'full',
-    banReason: record.banReason || 'Violation of GameLand Community Guidelines',
-    banExpiresAt: record.banExpiresAt || null,
-    bannedBy: record.bannedBy || 'Admin',
-  });
-});
-
-// Unban User Endpoint
-app.post('/api/users/:username/unban', (req, res) => {
-  const username = (req.params.username || '').toLowerCase();
-  const record = serverUsersStore[username];
-  if (!record) {
-    return res.status(404).json({ success: false, error: 'User account not found.' });
-  }
-
-  delete record.isBanned;
-  delete record.banType;
-  delete record.banReason;
-  delete record.bannedAt;
-  delete record.banExpiresAt;
-  delete record.bannedBy;
-
-  savePersistedUsers();
-
-  console.log(`🛡️ User "${username}" unbanned and restored to full active status.`);
-
-  io.emit('user:unbanned', { username });
-  io.emit('users:synced_all', serverUsersStore);
-
-  return res.json({ success: true, username });
 });
 
 // Serve frontend via Vite in dev mode or static files in production

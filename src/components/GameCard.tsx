@@ -2,7 +2,7 @@ import React from 'react';
 import { Play, Star, Heart, Flame, Eye, Sparkles, Crown, Lock } from 'lucide-react';
 import { Game } from '../types';
 import { formatPlayCount } from '../data/gamesData';
-import { UserAccount, hasVipAccess, isUserCurrentlyBanned, getCurrentSessionUser } from '../utils/auth';
+import { UserAccount, hasVipAccess, getCurrentSessionUser } from '../utils/auth';
 
 interface GameCardProps {
   game: Game;
@@ -26,22 +26,8 @@ export const GameCard: React.FC<GameCardProps> = ({
   const activeSession = currentUser || getCurrentSessionUser();
   const requiredTier = game.vipLevel || 'Gold';
   const isLocked = game.isVipExclusive && (activeSession ? !hasVipAccess(activeSession, requiredTier) : !isVipUser);
-  const isBanned = !!(
-    activeSession &&
-    isUserCurrentlyBanned(activeSession) &&
-    (activeSession.banType === 'full' || activeSession.banType === 'temporary' || !activeSession.banType)
-  );
 
   const handleClick = () => {
-    const freshSession = getCurrentSessionUser() || activeSession;
-    if (
-      freshSession &&
-      isUserCurrentlyBanned(freshSession) &&
-      (freshSession.banType === 'full' || freshSession.banType === 'temporary' || !freshSession.banType)
-    ) {
-      alert(`⛔ Account Suspended: Your account is restricted (${freshSession.banReason || 'Rule violation'}). You cannot play games.`);
-      return;
-    }
     if (isLocked && onVipLockClick) {
       onVipLockClick(game);
     } else {
