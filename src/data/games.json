@@ -1,4 +1,23 @@
 [
+ {"id": "snow-rider-3d",
+    "title": "Snow Rider 3d",
+    "slug": "Snow Rider 3d",
+    "category": "Sports",
+    "description": "Snow Rider 3d",
+    "thumbnailUrl": "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=600",
+    "embedUrl": "https://penguin-tech2.github.io/Snow-Rider-3D/",
+    "embedType": "iframe",
+    "rating": 5.0,
+    "playCount": 14200,
+    "controls": [
+      { "key": "Mouse / Touch", "action": "Play / Skip / Genre Select" },
+      { "key": "Space", "action": "Play / Pause Track" }
+    ],
+    "author": "GameLand Penguin Audio",
+    "isFeatured": true,
+    "isPopular": true,
+    "isNew": true
+  },
   {
     "id": "penguin-music-lounge",
     "title": "Penguin Beats: Music Lounge",
