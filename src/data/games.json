@@ -328,13 +328,13 @@
     "author": "Yoshi Junior"
   },
   {
-    "id": "jobob",
-    "title": "JoBob Portal",
-    "slug": "jobob",
+    "id": "youtube",
+    "title": "youtube",
+    "slug": "youtube",
     "category": "Hubs",
     "description": "Unblocked 2026 gaming catalog and dedicated proxy portal.",
     "thumbnailUrl": "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80&w=600",
-    "embedUrl": "https://unblocked-2026.github.io/",
+    "embedUrl": "https://www.youtube.com/",
     "embedType": "iframe",
     "tags": ["portal", "hub", "unblocked", "2026"],
     "rating": 4.7,
