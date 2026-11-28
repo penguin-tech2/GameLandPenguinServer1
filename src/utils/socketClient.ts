@@ -202,6 +202,54 @@ if (typeof window !== 'undefined') {
     socket.on('users:mass_coins_granted', (data: { amount: number; note?: string }) => {
       window.dispatchEvent(new CustomEvent('gameland_mass_coins_granted', { detail: data }));
     });
+
+    // Real-time ban / timed suspension eviction from server
+    socket.on('user:banned', (data: {
+      username?: string;
+      isBanned?: boolean;
+      banReason?: string | null;
+      bannedAt?: string | null;
+      bannedUntil?: string | null;
+      bannedBy?: string | null;
+      message?: string;
+    }) => {
+      try {
+        const targetKey = data?.username?.toLowerCase();
+        if (targetKey) {
+          const raw = localStorage.getItem(USERS_STORAGE_KEY);
+          const existing = raw ? JSON.parse(raw) : {};
+          if (existing[targetKey]) {
+            existing[targetKey].isBanned = true;
+            existing[targetKey].banReason = data.banReason || undefined;
+            existing[targetKey].bannedAt = data.bannedAt || undefined;
+            existing[targetKey].bannedUntil = data.bannedUntil || undefined;
+            existing[targetKey].bannedBy = data.bannedBy || undefined;
+            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(existing));
+          }
+        }
+
+        const sessionRaw = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+        const session = sessionRaw ? JSON.parse(sessionRaw) : null;
+        if (!targetKey || (session && session.username && session.username.toLowerCase() === targetKey)) {
+          localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+          clearAuthToken();
+          window.dispatchEvent(
+            new CustomEvent('gameland_session_banned', {
+              detail: {
+                username: data?.username || session?.username,
+                banReason: data?.banReason || null,
+                bannedUntil: data?.bannedUntil || null,
+                message:
+                  data?.message ||
+                  '⛔ Your account has been banned or suspended by an administrator.',
+              },
+            })
+          );
+        }
+      } catch (err) {
+        console.error('Error handling user:banned socket event', err);
+      }
+    });
   } catch (err) {
     console.warn('Socket initialization standby:', err);
   }
@@ -461,5 +509,39 @@ export async function cloudRunPromoteAllVip(
   } catch (err: any) {
     console.warn('Mass VIP standby:', err.message || err);
     return { success: false, error: err.message || 'Network error' };
+  }
+}
+
+export async function banUserOnServer(
+  username: string,
+  options: { reason?: string; permanent?: boolean; durationHours?: number }
+): Promise<{ success: boolean; user?: any; error?: string }> {
+  if (typeof window === 'undefined' || !authToken) return { success: false, error: 'Not authenticated' };
+  const backend = getEffectiveBackendUrl();
+  try {
+    const res = await fetch(`${backend}/api/users/${encodeURIComponent(username.toLowerCase())}/ban`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(options),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error' };
+  }
+}
+
+export async function unbanUserOnServer(
+  username: string
+): Promise<{ success: boolean; user?: any; error?: string }> {
+  if (typeof window === 'undefined' || !authToken) return { success: false, error: 'Not authenticated' };
+  const backend = getEffectiveBackendUrl();
+  try {
+    const res = await fetch(`${backend}/api/users/${encodeURIComponent(username.toLowerCase())}/unban`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error' };
   }
 }

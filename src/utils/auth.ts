@@ -13,6 +13,8 @@ import {
   registerUserOnServer,
   updatePasswordOnServer,
   toggleAdminRoleOnServer,
+  banUserOnServer,
+  unbanUserOnServer,
 } from './socketClient';
 import {
   encryptPassword,
@@ -66,6 +68,11 @@ export interface UserAccount {
   snacksInventory?: Record<string, number>;
   penguinHappiness?: number;
   penguinFeedCount?: number;
+  isBanned?: boolean;
+  banReason?: string;
+  bannedAt?: string;
+  bannedUntil?: string | null;
+  bannedBy?: string;
 }
 
 export interface PenguinSnackItem {
@@ -251,7 +258,42 @@ type StoredUserRecord = {
   snacksInventory?: Record<string, number>;
   penguinHappiness?: number;
   penguinFeedCount?: number;
+  isBanned?: boolean;
+  banReason?: string;
+  bannedAt?: string;
+  bannedUntil?: string | null;
+  bannedBy?: string;
 };
+
+export function isUserBanActive(record?: Partial<UserAccount> | Partial<StoredUserRecord> | null): boolean {
+  if (!record || !record.isBanned) return false;
+  if (record.username?.toLowerCase() === ADMIN_USERNAME.toLowerCase()) return false;
+  if (record.bannedUntil) {
+    const exp = Date.parse(record.bannedUntil);
+    if (Number.isFinite(exp) && exp <= Date.now()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function formatUserBanNotice(record?: Partial<UserAccount> | Partial<StoredUserRecord> | null): string {
+  const reason = record?.banReason?.trim() || 'Violation of GameLand community rules.';
+  if (record?.bannedUntil) {
+    const exp = new Date(record.bannedUntil);
+    const formatted = Number.isFinite(exp.getTime())
+      ? exp.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : String(record.bannedUntil);
+    return `⛔ Your account is suspended until ${formatted}. Reason: ${reason}`;
+  }
+  return `⛔ Your account has been permanently banned. Reason: ${reason}`;
+}
 
 const DEFAULT_USERS: Record<string, StoredUserRecord> = {};
 
@@ -358,6 +400,10 @@ export function getCurrentSessionUser(): UserAccount | null {
     const lowerKey = session.username.toLowerCase();
     const record = users[lowerKey];
     if (record) {
+      if (lowerKey !== ADMIN_USERNAME.toLowerCase() && isUserBanActive(record)) {
+        localStorage.removeItem(SESSION_KEY);
+        return null;
+      }
       if (record.points !== undefined) session.points = record.points;
       if (record.isVip !== undefined) session.isVip = record.isVip;
       if (record.vipLevel !== undefined) session.vipLevel = record.vipLevel;
@@ -519,6 +565,10 @@ export function loginAccount(usernameInput: string, passwordInput: string): { su
     return { success: false, error: 'Incorrect password. Please try again.' };
   }
 
+  if (lowerKey !== ADMIN_USERNAME.toLowerCase() && isUserBanActive(record)) {
+    return { success: false, error: formatUserBanNotice(record) };
+  }
+
   if (record.isTestAccount && !isPassLimitOverrideActive()) {
     if (hasDeviceUsedTestAccount()) {
       const active = getCurrentSessionUser();
@@ -676,6 +726,11 @@ export function getAllUserRecords(): (UserAccount & { passwordHash: string })[] 
     penguinHappiness: record.penguinHappiness ?? 85,
     penguinFeedCount: record.penguinFeedCount ?? 0,
     points: record.points ?? 0,
+    isBanned: isUserBanActive({ ...record, username: key }),
+    banReason: isUserBanActive({ ...record, username: key }) ? record.banReason : undefined,
+    bannedAt: isUserBanActive({ ...record, username: key }) ? record.bannedAt : undefined,
+    bannedUntil: isUserBanActive({ ...record, username: key }) ? record.bannedUntil : undefined,
+    bannedBy: isUserBanActive({ ...record, username: key }) ? record.bannedBy : undefined,
   }));
 }
 
@@ -805,6 +860,54 @@ export function generateNewVipAccount(
 export function deleteUserAccount(_username: string): boolean {
   console.warn('Account deletion is permanently disabled. User accounts are permanent and cannot be deleted.');
   return false;
+}
+
+export async function banUserAccount(
+  username: string,
+  options: { reason?: string; permanent?: boolean; durationHours?: number }
+): Promise<{ success: boolean; error?: string }> {
+  const key = username.toLowerCase();
+  if (key === ADMIN_USERNAME.toLowerCase()) {
+    return { success: false, error: 'Primary owner admin account cannot be banned.' };
+  }
+
+  const serverRes = await banUserOnServer(key, options);
+  if (!serverRes.success) {
+    return { success: false, error: serverRes.error || 'Failed to ban user account.' };
+  }
+
+  const users = getStoredUsers();
+  if (users[key] && serverRes.user) {
+    users[key] = {
+      ...users[key],
+      ...serverRes.user,
+    };
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    window.dispatchEvent(new CustomEvent('gameland_users_updated', { detail: users }));
+  }
+  return { success: true };
+}
+
+export async function unbanUserAccount(
+  username: string
+): Promise<{ success: boolean; error?: string }> {
+  const key = username.toLowerCase();
+  const serverRes = await unbanUserOnServer(key);
+  if (!serverRes.success) {
+    return { success: false, error: serverRes.error || 'Failed to unban user account.' };
+  }
+
+  const users = getStoredUsers();
+  if (users[key]) {
+    users[key].isBanned = false;
+    delete users[key].banReason;
+    delete users[key].bannedAt;
+    delete users[key].bannedUntil;
+    delete users[key].bannedBy;
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    window.dispatchEvent(new CustomEvent('gameland_users_updated', { detail: users }));
+  }
+  return { success: true };
 }
 
 export function updateUserPassword(username: string, newPassword: string): boolean {

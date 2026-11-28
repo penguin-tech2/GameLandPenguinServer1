@@ -124,6 +124,8 @@ import {
   adminRejectVipOrderByUsername,
   syncUsersWithServer,
   saveUsers,
+  banUserAccount,
+  unbanUserAccount,
 } from '../utils/auth';
 import {
   resetAllLeaderboardsToZero,
@@ -217,7 +219,13 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
   const [editingUserPass, setEditingUserPass] = useState<string | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [userMsg, setUserMsg] = useState('');
-  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'online' | 'vip'>('all');
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'online' | 'vip' | 'banned'>('all');
+
+  // Ban / Suspension modal state
+  const [banModalUser, setBanModalUser] = useState<string | null>(null);
+  const [banDurationPreset, setBanDurationPreset] = useState<'1h' | '24h' | '7d' | '30d' | 'permanent'>('24h');
+  const [banReasonInput, setBanReasonInput] = useState('');
+  const [banSubmitting, setBanSubmitting] = useState(false);
 
   // Add User Form
   const [showAddUserForm, setShowAddUserForm] = useState(false);
@@ -840,6 +848,59 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
   const handleDeleteUser = (_username: string) => {
     setUserMsg(`Account deletion is permanently disabled. All accounts are saved in the backend and can never be deleted.`);
     setTimeout(() => setUserMsg(''), 3500);
+  };
+
+  const handleConfirmBanUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!banModalUser || banSubmitting) return;
+    setBanSubmitting(true);
+
+    const presetHoursMap: Record<'1h' | '24h' | '7d' | '30d', number> = {
+      '1h': 1,
+      '24h': 24,
+      '7d': 168,
+      '30d': 720,
+    };
+
+    const options =
+      banDurationPreset === 'permanent'
+        ? { permanent: true, reason: banReasonInput.trim() || 'Violation of GameLand community rules.' }
+        : {
+            permanent: false,
+            durationHours: presetHoursMap[banDurationPreset],
+            reason: banReasonInput.trim() || 'Temporary suspension for violating GameLand rules.',
+          };
+
+    const res = await banUserAccount(banModalUser, options);
+    setBanSubmitting(false);
+
+    if (res.success) {
+      const label = banDurationPreset === 'permanent' ? 'permanently banned' : `suspended (${banDurationPreset})`;
+      addAuditLog('users', `Admin ${label} user "${banModalUser}". Reason: ${options.reason}`);
+      setUserMsg(`Account "${banModalUser}" has been ${label} and disconnected.`);
+      setBanModalUser(null);
+      setBanReasonInput('');
+      setBanDurationPreset('24h');
+      fetchOnlineUsersFromServer().then((list) => {
+        if (list) setOnlineUsersList(list);
+      });
+      refreshData();
+    } else {
+      setUserMsg(res.error || `Failed to ban "${banModalUser}".`);
+    }
+    setTimeout(() => setUserMsg(''), 4000);
+  };
+
+  const handleUnbanUser = async (username: string) => {
+    const res = await unbanUserAccount(username);
+    if (res.success) {
+      addAuditLog('users', `Admin unbanned user "${username}"`);
+      setUserMsg(`Account "${username}" has been unbanned and access restored.`);
+      refreshData();
+    } else {
+      setUserMsg(res.error || `Failed to unban "${username}".`);
+    }
+    setTimeout(() => setUserMsg(''), 4000);
   };
 
   const handleUpdatePassword = (username: string) => {
@@ -2854,6 +2915,18 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                 >
                   VIP Members ({usersList.filter((u) => u.isVip).length})
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setUserStatusFilter('banned')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    userStatusFilter === 'banned'
+                      ? 'bg-rose-500 text-white shadow-sm'
+                      : 'bg-slate-900 text-rose-300 hover:text-white border border-rose-500/30'
+                  }`}
+                >
+                  <Ban className="w-3 h-3" />
+                  <span>Banned ({usersList.filter((u) => u.isBanned).length})</span>
+                </button>
               </div>
 
               {userMsg && (
@@ -2969,6 +3042,7 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                         .filter((u) => {
                           if (userStatusFilter === 'vip' && !u.isVip) return false;
                           if (userStatusFilter === 'online' && !onlineUsersByKey.has(u.username.toLowerCase())) return false;
+                          if (userStatusFilter === 'banned' && !u.isBanned) return false;
                           if (!userSearch) return true;
                           const s = userSearch.toLowerCase();
                           return (
@@ -2982,14 +3056,23 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                             user.username.toLowerCase() === 'pebblesthepenguinishaany83';
                           const onlineInfo = onlineUsersByKey.get(user.username.toLowerCase());
                           return (
-                            <tr key={user.username} className={`hover:bg-slate-800/40 transition-colors ${onlineInfo ? 'bg-emerald-950/15' : ''}`}>
+                            <tr
+                              key={user.username}
+                              className={`hover:bg-slate-800/40 transition-colors ${
+                                user.isBanned ? 'bg-rose-950/20' : onlineInfo ? 'bg-emerald-950/15' : ''
+                              }`}
+                            >
                               <td className="py-3 px-4">
                                 <div className="font-extrabold text-white flex items-center gap-2">
                                   <span
                                     className={`w-2 h-2 rounded-full shrink-0 ${
-                                      onlineInfo ? 'bg-emerald-400 animate-pulse' : 'bg-slate-700'
+                                      user.isBanned
+                                        ? 'bg-rose-500'
+                                        : onlineInfo
+                                        ? 'bg-emerald-400 animate-pulse'
+                                        : 'bg-slate-700'
                                     }`}
-                                    title={onlineInfo ? 'Currently Online' : 'Offline'}
+                                    title={user.isBanned ? 'Banned / Suspended' : onlineInfo ? 'Currently Online' : 'Offline'}
                                   ></span>
                                   <span>{user.username}</span>
                                   {isPrimaryAdmin && (
@@ -3085,7 +3168,32 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                               </td>
 
                               <td className="py-3 px-4 text-[11px]">
-                                {onlineInfo ? (
+                                {user.isBanned ? (
+                                  <div className="space-y-0.5">
+                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold">
+                                      <Ban className="w-3 h-3" />
+                                      <span>{user.bannedUntil ? 'Suspended' : 'Banned'}</span>
+                                    </div>
+                                    <div className="text-[10px] text-rose-300/90 tabular-nums">
+                                      {user.bannedUntil
+                                        ? `Until ${new Date(user.bannedUntil).toLocaleString([], {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })}`
+                                        : 'Permanent'}
+                                    </div>
+                                    {user.banReason && (
+                                      <div
+                                        className="text-[10px] text-slate-400 truncate max-w-[160px]"
+                                        title={user.banReason}
+                                      >
+                                        {user.banReason}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : onlineInfo ? (
                                   <div className="space-y-0.5">
                                     <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
                                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -3203,12 +3311,32 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                                         {user.isAdmin ? 'Revoke Admin' : 'Make Admin'}
                                       </button>
 
-                                      <span
-                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold"
-                                        title="Account is saved permanently in backend and cannot be deleted"
-                                      >
-                                        <ShieldCheck className="w-3 h-3" /> Permanent
-                                      </span>
+                                      {user.username.toLowerCase() !== sessionUser?.username?.toLowerCase() && (
+                                        user.isBanned ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUnbanUser(user.username)}
+                                            className="px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition-colors"
+                                            title="Unban Account & Restore Access"
+                                          >
+                                            Unban
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setBanModalUser(user.username);
+                                              setBanDurationPreset('24h');
+                                              setBanReasonInput('');
+                                            }}
+                                            className="px-2 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[10px] font-bold transition-colors flex items-center gap-1"
+                                            title="Ban or Suspend User"
+                                          >
+                                            <Ban className="w-3 h-3" />
+                                            <span>Ban</span>
+                                          </button>
+                                        )
+                                      )}
                                     </>
                                   )}
                                 </div>
@@ -3793,6 +3921,115 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Ban / Timed Suspension Modal */}
+      {banModalUser && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <form
+            onSubmit={handleConfirmBanUser}
+            className="w-full max-w-md bg-slate-900 border border-rose-500/40 rounded-2xl shadow-2xl overflow-hidden"
+          >
+            <div className="p-4 px-5 bg-slate-950 border-b border-rose-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                  <Ban className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-white">
+                    Ban or Suspend Account
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Target: <span className="font-bold text-rose-300">{banModalUser}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBanModalUser(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-2">
+                  Restriction Duration
+                </label>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                  {(
+                    [
+                      { id: '1h', label: '1 Hour' },
+                      { id: '24h', label: '24 Hours' },
+                      { id: '7d', label: '7 Days' },
+                      { id: '30d', label: '30 Days' },
+                      { id: 'permanent', label: 'Permanent' },
+                    ] as const
+                  ).map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setBanDurationPreset(preset.id)}
+                      className={`py-2 px-2 rounded-xl font-bold text-[11px] transition-all border ${
+                        banDurationPreset === preset.id
+                          ? preset.id === 'permanent'
+                            ? 'bg-rose-500 text-white border-rose-400 shadow-sm'
+                            : 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                          : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1.5">
+                  Reason (shown to user on sign-in)
+                </label>
+                <textarea
+                  rows={3}
+                  maxLength={300}
+                  value={banReasonInput}
+                  onChange={(e) => setBanReasonInput(e.target.value)}
+                  placeholder="Enter reason (e.g. Disruptive behavior or violating GameLand rules)..."
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-rose-500/60 resize-none"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-rose-950/30 border border-rose-500/30 text-[11px] text-rose-200/90 leading-relaxed">
+                If <span className="font-bold">{banModalUser}</span> is online right now, they will be signed out immediately and shown this reason and expiration time.
+              </div>
+            </div>
+
+            <div className="p-4 px-5 bg-slate-950 border-t border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setBanModalUser(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={banSubmitting}
+                className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 disabled:opacity-60 text-white text-xs font-extrabold transition-colors flex items-center gap-1.5 shadow-md"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>
+                  {banSubmitting
+                    ? 'Applying...'
+                    : banDurationPreset === 'permanent'
+                    ? 'Confirm Permanent Ban'
+                    : `Suspend (${banDurationPreset})`}
+                </span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

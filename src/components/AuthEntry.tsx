@@ -34,9 +34,10 @@ import { SnowfallEffect } from './SnowfallEffect';
 
 interface AuthEntryProps {
   onLoginSuccess: (user: UserAccount) => void;
+  initialErrorMessage?: string | null;
 }
 
-export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
+export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess, initialErrorMessage = null }) => {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   
   // Form State
@@ -48,7 +49,7 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   
   // UI feedback
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(initialErrorMessage);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -61,6 +62,13 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
     refreshAccountsList();
     refreshTestAccounts();
   }, []);
+
+  useEffect(() => {
+    if (initialErrorMessage) {
+      setMode('signin');
+      setErrorMessage(initialErrorMessage);
+    }
+  }, [initialErrorMessage]);
 
   const refreshAccountsList = () => {
     try {

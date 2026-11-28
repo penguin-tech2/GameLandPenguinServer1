@@ -154,6 +154,44 @@ function verifyAuthToken(token?: string | null): TokenPayload | null {
   }
 }
 
+function isRecordBanActive(record: Record<string, any> | undefined | null): boolean {
+  if (!record || !record.isBanned) return false;
+  if (record.bannedUntil) {
+    const expiresAt = Date.parse(record.bannedUntil);
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      record.isBanned = false;
+      delete record.banReason;
+      delete record.bannedAt;
+      delete record.bannedUntil;
+      delete record.bannedBy;
+      savePersistedUsers(false);
+      return false;
+    }
+  }
+  return true;
+}
+
+function formatBanMessage(record: Record<string, any>): string {
+  const reason =
+    typeof record.banReason === 'string' && record.banReason.trim()
+      ? record.banReason.trim()
+      : 'Violation of GameLand community rules.';
+  if (record.bannedUntil) {
+    const expiresDate = new Date(record.bannedUntil);
+    const formattedExpiry = Number.isFinite(expiresDate.getTime())
+      ? expiresDate.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : String(record.bannedUntil);
+    return `⛔ Your account is suspended until ${formattedExpiry}. Reason: ${reason}`;
+  }
+  return `⛔ Your account has been permanently banned. Reason: ${reason}`;
+}
+
 function sanitizeUserRecord(record: Record<string, any> | undefined | null): Record<string, any> | null {
   if (!record || typeof record !== 'object') return null;
   const { passwordHash: _ph, password: _pw, adminClaimed: _ac, ...safe } = record;
@@ -397,6 +435,26 @@ io.on('connection', (socket) => {
 
   if (verified) {
     const rec = serverUsersStore[verified.sub];
+    if (rec && isRecordBanActive(rec)) {
+      socket.emit('user:banned', {
+        username: verified.sub,
+        isBanned: true,
+        banReason: rec.banReason || null,
+        bannedAt: rec.bannedAt || null,
+        bannedUntil: rec.bannedUntil || null,
+        bannedBy: rec.bannedBy || null,
+        message: formatBanMessage(rec),
+      });
+      setTimeout(() => {
+        try {
+          socket.disconnect(true);
+        } catch {
+          // Ignore disconnect errors
+        }
+      }, 150);
+      return;
+    }
+
     if (rec) {
       socket.data.username = verified.sub;
       socket.data.isAdmin = !!(rec.isAdmin || verified.sub === PRIMARY_ADMIN_USERNAME);
@@ -537,6 +595,15 @@ function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunctio
   if (!record) {
     return res.status(401).json({ success: false, error: 'Account no longer exists.' });
   }
+  if (isRecordBanActive(record)) {
+    return res.status(403).json({
+      success: false,
+      banned: true,
+      banReason: record.banReason || null,
+      bannedUntil: record.bannedUntil || null,
+      error: formatBanMessage(record),
+    });
+  }
   req.authUser = {
     username: payload.sub,
     isAdmin: !!(record.isAdmin || payload.sub === PRIMARY_ADMIN_USERNAME),
@@ -594,6 +661,16 @@ app.post('/api/users/login', authLimiter, (req, res) => {
 
   if (!authenticated) {
     return res.status(401).json({ success: false, error: 'Invalid username or password.' });
+  }
+
+  if (lowerKey !== PRIMARY_ADMIN_USERNAME && isRecordBanActive(record)) {
+    return res.status(403).json({
+      success: false,
+      banned: true,
+      banReason: record.banReason || null,
+      bannedUntil: record.bannedUntil || null,
+      error: formatBanMessage(record),
+    });
   }
 
   // Single-use test account check
@@ -763,12 +840,16 @@ app.get('/api/users/csv', requireAdmin, (_req, res) => {
     'VIP Status',
     'VIP Tier',
     'Points',
+    'Account Status',
+    'Ban Reason',
+    'Banned Until',
     'Registered Date',
     'Last Login',
   ];
 
-  const rows = Object.values(serverUsersStore).map((u: any) =>
-    [
+  const rows = Object.values(serverUsersStore).map((u: any) => {
+    const banned = isRecordBanActive(u);
+    return [
       escapeCsvCell(u.username),
       escapeCsvCell(u.email || ''),
       escapeCsvCell(u.name || ''),
@@ -776,10 +857,13 @@ app.get('/api/users/csv', requireAdmin, (_req, res) => {
       escapeCsvCell(u.isVip ? 'VIP' : 'Free'),
       escapeCsvCell(u.vipLevel || 'None'),
       escapeCsvCell(u.points ?? 0),
+      escapeCsvCell(banned ? (u.bannedUntil ? 'Suspended' : 'Banned') : 'Active'),
+      escapeCsvCell(banned ? u.banReason || '' : ''),
+      escapeCsvCell(banned && u.bannedUntil ? u.bannedUntil : banned ? 'Permanent' : ''),
       escapeCsvCell(u.createdAt || ''),
       escapeCsvCell(u.lastLogin || ''),
-    ].join(',')
-  );
+    ].join(',');
+  });
 
   const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -802,6 +886,11 @@ app.post('/api/users/sync', requireAdmin, (req, res) => {
       password: rawPw,
       passwordHash: rawPh,
       adminClaimed: _ignoreClaimed,
+      isBanned: _ignoreBanned,
+      banReason: _ignoreBanReason,
+      bannedAt: _ignoreBannedAt,
+      bannedUntil: _ignoreBannedUntil,
+      bannedBy: _ignoreBannedBy,
       ...safeProfile
     } = incoming;
 
@@ -818,6 +907,11 @@ app.post('/api/users/sync', requireAdmin, (req, res) => {
       ...safeProfile,
       passwordHash: nextPasswordHash,
       adminClaimed: existing.adminClaimed,
+      isBanned: lowerKey === PRIMARY_ADMIN_USERNAME ? false : !!existing.isBanned,
+      banReason: lowerKey === PRIMARY_ADMIN_USERNAME ? undefined : existing.banReason,
+      bannedAt: lowerKey === PRIMARY_ADMIN_USERNAME ? undefined : existing.bannedAt,
+      bannedUntil: lowerKey === PRIMARY_ADMIN_USERNAME ? undefined : existing.bannedUntil,
+      bannedBy: lowerKey === PRIMARY_ADMIN_USERNAME ? undefined : existing.bannedBy,
       isAdmin: lowerKey === PRIMARY_ADMIN_USERNAME ? true : !!(safeProfile.isAdmin ?? existing.isAdmin),
       username: safeProfile.username || existing.username || key,
     };
@@ -912,6 +1006,91 @@ app.post('/api/users/:username/admin-role', requireAdmin, (req: AuthenticatedReq
   savePersistedUsers();
   io.to('admins').emit('users:synced_all', sanitizeAllUsers(serverUsersStore));
   return res.json({ success: true, username: target, isAdmin: record.isAdmin });
+});
+
+app.post('/api/users/:username/ban', requireAdmin, (req: AuthenticatedRequest, res) => {
+  const target = (req.params.username || '').toLowerCase();
+  if (target === PRIMARY_ADMIN_USERNAME) {
+    return res.status(403).json({ success: false, error: 'Primary owner admin account cannot be banned.' });
+  }
+  if (req.authUser!.username === target) {
+    return res.status(400).json({ success: false, error: 'You cannot ban your own account.' });
+  }
+  const record = serverUsersStore[target];
+  if (!record) {
+    return res.status(404).json({ success: false, error: 'User not found.' });
+  }
+
+  const rawReason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 300) : '';
+  const reason = rawReason || 'Violation of GameLand community rules.';
+  const isPermanent = req.body?.permanent === true;
+  const rawHours = Number(req.body?.durationHours);
+
+  let bannedUntil: string | null = null;
+  if (!isPermanent && Number.isFinite(rawHours) && rawHours > 0) {
+    const clampedHours = Math.min(rawHours, 24 * 365 * 10);
+    bannedUntil = new Date(Date.now() + clampedHours * 60 * 60 * 1000).toISOString();
+  } else if (!isPermanent && typeof req.body?.bannedUntil === 'string' && req.body.bannedUntil.trim()) {
+    const parsed = Date.parse(req.body.bannedUntil);
+    if (!Number.isFinite(parsed) || parsed <= Date.now()) {
+      return res.status(400).json({ success: false, error: 'Suspension expiration must be in the future.' });
+    }
+    bannedUntil = new Date(parsed).toISOString();
+  }
+
+  record.isBanned = true;
+  record.banReason = reason;
+  record.bannedAt = new Date().toISOString();
+  record.bannedUntil = bannedUntil;
+  record.bannedBy = req.authUser!.username;
+
+  savePersistedUsers();
+
+  const banPayload = {
+    username: target,
+    isBanned: true,
+    banReason: record.banReason,
+    bannedAt: record.bannedAt,
+    bannedUntil: record.bannedUntil,
+    bannedBy: record.bannedBy,
+    message: formatBanMessage(record),
+  };
+
+  // Notify and immediately disconnect any live sockets belonging to the banned user
+  io.to(`user:${target}`).emit('user:banned', banPayload);
+  onlineUserSockets.delete(target);
+  onlineUserMeta.delete(target);
+  broadcastOnlineUsersToAdmins();
+  setTimeout(() => {
+    io.in(`user:${target}`).disconnectSockets(true);
+  }, 150);
+
+  io.to('admins').emit('users:synced_all', sanitizeAllUsers(serverUsersStore));
+  return res.json({
+    success: true,
+    user: sanitizeUserRecord(record),
+  });
+});
+
+app.post('/api/users/:username/unban', requireAdmin, (req, res) => {
+  const target = (req.params.username || '').toLowerCase();
+  const record = serverUsersStore[target];
+  if (!record) {
+    return res.status(404).json({ success: false, error: 'User not found.' });
+  }
+
+  record.isBanned = false;
+  delete record.banReason;
+  delete record.bannedAt;
+  delete record.bannedUntil;
+  delete record.bannedBy;
+
+  savePersistedUsers();
+  io.to('admins').emit('users:synced_all', sanitizeAllUsers(serverUsersStore));
+  return res.json({
+    success: true,
+    user: sanitizeUserRecord(record),
+  });
 });
 
 app.post('/api/users/:username/coins', requireAuth, (req: AuthenticatedRequest, res) => {

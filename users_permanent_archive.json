@@ -147,7 +147,7 @@
     "name": "Pebbles (Ishaan)",
     "email": "ishaany83@gmail.com",
     "createdAt": "2026-11-14T00:51:44.613Z",
-    "lastLogin": "2026-11-28T18:20:49.142Z",
+    "lastLogin": "2026-11-28T18:54:08.739Z",
     "isAdmin": true,
     "isVip": true,
     "vipLevel": "Diamond",
@@ -187,7 +187,8 @@
     "activeProfileFrame": "ring-2 ring-cyan-400 ring-offset-2 ring-offset-slate-900 shadow-lg shadow-cyan-500/50",
     "snacksInventory": {},
     "penguinHappiness": 85,
-    "penguinFeedCount": 0
+    "penguinFeedCount": 0,
+    "isBanned": false
   },
   "test_pass_beta": {
     "points": 14,

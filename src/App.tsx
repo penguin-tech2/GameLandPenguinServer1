@@ -76,6 +76,7 @@ export default function App() {
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [isVipLoungeOpen, setIsVipLoungeOpen] = useState(false);
   const [snowPartyActive, setSnowPartyActive] = useState(false);
+  const [banNotice, setBanNotice] = useState<string | null>(null);
 
   useEffect(() => {
     syncUsersWithServer();
@@ -181,9 +182,25 @@ export default function App() {
       });
     };
 
+    const handleSessionBanned = (e: Event) => {
+      const customEvent = e as CustomEvent<{ message?: string }>;
+      logoutAccount();
+      setSelectedGame(null);
+      setIsAdminModalOpen(false);
+      setIsProfileModalOpen(false);
+      setIsStoreModalOpen(false);
+      setIsVipLoungeOpen(false);
+      setCurrentUser(null);
+      setBanNotice(
+        customEvent.detail?.message ||
+          '⛔ Your account has been banned or suspended by an administrator.'
+      );
+    };
+
     window.addEventListener('gameland_session_coins_updated', handleSessionCoinsUpdated);
     window.addEventListener('gameland_session_vip_updated', handleSessionVipUpdated);
     window.addEventListener('gameland_mass_coins_granted', handleMassCoinsGranted);
+    window.addEventListener('gameland_session_banned', handleSessionBanned);
 
     const handleOpenStoreModal = () => setIsStoreModalOpen(true);
     window.addEventListener('gameland_open_store_modal', handleOpenStoreModal);
@@ -194,6 +211,7 @@ export default function App() {
       window.removeEventListener('gameland_session_coins_updated', handleSessionCoinsUpdated);
       window.removeEventListener('gameland_session_vip_updated', handleSessionVipUpdated);
       window.removeEventListener('gameland_mass_coins_granted', handleMassCoinsGranted);
+      window.removeEventListener('gameland_session_banned', handleSessionBanned);
       window.removeEventListener('gameland_open_store_modal', handleOpenStoreModal);
     };
   }, []);
@@ -313,7 +331,15 @@ export default function App() {
   }, [games]);
 
   if (!currentUser) {
-    return <AuthEntry onLoginSuccess={(user) => setCurrentUser(user)} />;
+    return (
+      <AuthEntry
+        initialErrorMessage={banNotice}
+        onLoginSuccess={(user) => {
+          setBanNotice(null);
+          setCurrentUser(user);
+        }}
+      />
+    );
   }
 
   return (
