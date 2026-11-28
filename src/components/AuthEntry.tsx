@@ -22,14 +22,12 @@ import {
 } from 'lucide-react';
 import { 
   getMySavedAccounts, 
-  loginAccount, 
   loginAccountAsync,
-  registerAccount, 
+  registerAccountAsync,
   UserAccount,
   hasDeviceUsedTestAccount,
   getTestAccountsList,
-  claimOneTimeTestAccount,
-  syncUsersWithServer
+  claimOneTimeTestAccountAsync,
 } from '../utils/auth';
 import { PenguinMascot } from './PenguinMascot';
 import { SnowfallEffect } from './SnowfallEffect';
@@ -54,7 +52,7 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // User's Local Saved Accounts for Preset Login
+  // User's Local Saved Accounts for Username Quick-Fill
   const [existingAccounts, setExistingAccounts] = useState<ReturnType<typeof getMySavedAccounts>>([]);
   const [testAccounts, setTestAccounts] = useState<ReturnType<typeof getTestAccountsList>>([]);
   const [hasUsedTestPass, setHasUsedTestPass] = useState(false);
@@ -62,10 +60,6 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
   useEffect(() => {
     refreshAccountsList();
     refreshTestAccounts();
-    syncUsersWithServer().then(() => {
-      refreshAccountsList();
-      refreshTestAccounts();
-    }).catch(() => {});
   }, []);
 
   const refreshAccountsList = () => {
@@ -86,25 +80,23 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleClaimOneTimeTestPass = () => {
+  const handleClaimOneTimeTestPass = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsLoading(true);
 
-    setTimeout(() => {
-      const result = claimOneTimeTestAccount();
-      if (result.success && result.user) {
-        setSuccessMessage(`🧪 Single-use test pass claimed! Welcome to GameLand, ${result.user.username}.`);
-        refreshTestAccounts();
-        refreshAccountsList();
-        setTimeout(() => {
-          onLoginSuccess(result.user!);
-        }, 700);
-      } else {
-        setErrorMessage(result.error || 'Failed to claim test pass.');
-      }
-      setIsLoading(false);
-    }, 300);
+    const result = await claimOneTimeTestAccountAsync();
+    if (result.success && result.user) {
+      setSuccessMessage(`🧪 Single-use test pass claimed! Welcome to GameLand, ${result.user.username}.`);
+      refreshTestAccounts();
+      refreshAccountsList();
+      setTimeout(() => {
+        onLoginSuccess(result.user!);
+      }, 600);
+    } else {
+      setErrorMessage(result.error || 'Failed to claim test pass.');
+    }
+    setIsLoading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,21 +116,20 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
         setErrorMessage(result.error || 'Login failed.');
       }
     } else {
-      // Sign Up Mode
       if (password !== confirmPassword) {
         setErrorMessage('Passwords do not match. Please verify your password.');
         setIsLoading(false);
         return;
       }
 
-      const result = registerAccount(username, password, fullName, email);
+      const result = await registerAccountAsync(username, password, fullName, email);
       if (result.success && result.user) {
         const welcomeName = result.user.name || result.user.username;
         setSuccessMessage(`Account created successfully! Saved permanently in backend database, welcome ${welcomeName}.`);
         refreshAccountsList();
         setTimeout(() => {
           onLoginSuccess(result.user!);
-        }, 800);
+        }, 700);
       } else {
         setErrorMessage(result.error || 'Registration failed.');
       }
@@ -146,26 +137,11 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
     setIsLoading(false);
   };
 
-  const handlePresetSelect = (accountUser: string, accountPass: string, autoSubmit = false) => {
+  const handlePresetFill = (accountUser: string) => {
     setMode('signin');
     setUsername(accountUser);
-    setPassword(accountPass);
+    setPassword('');
     setErrorMessage(null);
-
-    if (autoSubmit) {
-      setIsLoading(true);
-      loginAccountAsync(accountUser, accountPass).then((result) => {
-        if (result.success && result.user) {
-          setSuccessMessage(`Logging in as ${result.user.username}...`);
-          setTimeout(() => {
-            onLoginSuccess(result.user!);
-          }, 500);
-        } else {
-          setErrorMessage(result.error || 'Preset login failed.');
-        }
-        setIsLoading(false);
-      });
-    }
   };
 
   return (
@@ -309,8 +285,8 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
                         ) : (
                           <button
                             type="button"
-                            disabled={hasUsedTestPass}
-                            onClick={() => handlePresetSelect(acc.username, acc.passwordHash, true)}
+                            disabled={hasUsedTestPass || isLoading}
+                            onClick={handleClaimOneTimeTestPass}
                             className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors ${
                               hasUsedTestPass
                                 ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
@@ -328,7 +304,7 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
             )}
           </div>
 
-          {/* Quick Preset Login for User's Saved Accounts */}
+          {/* Quick Username Fill for User's Saved Accounts */}
           {existingAccounts.length > 0 && (
             <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 text-left shadow-lg">
               <div className="flex items-center justify-between">
@@ -336,7 +312,7 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
                   <KeyRound className="w-4 h-4 text-cyan-400" />
                   <span>Your Saved Accounts:</span>
                 </div>
-                <span className="text-[10px] text-slate-500 font-semibold">1-Click Quick Login</span>
+                <span className="text-[10px] text-slate-500 font-semibold">Quick Username Fill</span>
               </div>
 
               <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
@@ -361,7 +337,7 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
                           )}
                         </div>
                         <span className="text-[10px] text-slate-500 font-mono block truncate">
-                          Pass: ••••••••
+                          @{acc.username}
                         </span>
                       </div>
                     </div>
@@ -369,21 +345,12 @@ export const AuthEntry: React.FC<AuthEntryProps> = ({ onLoginSuccess }) => {
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        onClick={() => handlePresetSelect(acc.username, acc.passwordHash, false)}
-                        className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold transition-colors"
-                        title="Fill login form"
+                        onClick={() => handlePresetFill(acc.username)}
+                        className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold transition-colors"
+                        title="Fill username in login form"
                         id={`fill-preset-${acc.username}`}
                       >
-                        Fill
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handlePresetSelect(acc.username, acc.passwordHash, true)}
-                        className="px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-[10px] font-extrabold transition-colors flex items-center gap-1 shadow-xs"
-                        id={`login-preset-${acc.username}`}
-                      >
-                        <span>Login</span>
-                        <ArrowRight className="w-3 h-3" />
+                        Select Account
                       </button>
                     </div>
                   </div>

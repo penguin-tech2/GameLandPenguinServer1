@@ -41,6 +41,7 @@ import {
   awardGamePoints,
   syncUsersWithServer,
 } from './utils/auth';
+import { emitSocketUserActivity } from './utils/socketClient';
 import { recordFavoritesChange, evaluateTrophies } from './utils/trophies';
 import { PenguinMascot } from './components/PenguinMascot';
 import { SnowfallEffect } from './components/SnowfallEffect';
@@ -79,6 +80,12 @@ export default function App() {
   useEffect(() => {
     syncUsersWithServer();
   }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      emitSocketUserActivity(selectedGame ? selectedGame.title : null);
+    }
+  }, [selectedGame, currentUser]);
   const [pointsBanner, setPointsBanner] = useState<{ earned: number; total: number; multiplier: number; title: string } | null>(null);
   const [isDisguiseActive, setIsDisguiseActive] = useState(false);
   const [vipLockedModalData, setVipLockedModalData] = useState<{

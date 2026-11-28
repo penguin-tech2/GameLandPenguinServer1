@@ -117,25 +117,14 @@ export function encryptPassword(password: string): string {
 
 /**
  * Securely verifies whether a user input password matches the stored encrypted password.
- * Supports:
- * - Direct match against salted hash
- * - Exact hash match (e.g. from preset tokens or 1-click login)
- * - Graceful fallback for legacy unmigrated plaintext passwords
+ * Note: Submitting an encrypted hash string directly as a password is strictly rejected.
  */
 export function verifyPassword(inputPassword: string, storedHash?: string | null): boolean {
   if (!inputPassword || !storedHash) return false;
 
-  // 1. If stored hash is encrypted:
+  // 1. If stored hash is encrypted (salted SHA-256 on client fallback):
   if (isPasswordEncrypted(storedHash)) {
-    // Check if input is the plaintext password matching the encrypted hash
-    if (encryptPassword(inputPassword) === storedHash) {
-      return true;
-    }
-    // Or if input was already the encrypted hash (e.g. preset button passed stored hash)
-    if (inputPassword === storedHash) {
-      return true;
-    }
-    return false;
+    return encryptPassword(inputPassword) === storedHash;
   }
 
   // 2. Legacy fallback if stored password was still in plaintext before migration:

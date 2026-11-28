@@ -1,17 +1,21 @@
 import {
   emitSocketUsersSync,
-  emitSocketUserRegister,
-  fetchServerUsersSync,
-  BACKEND_URL,
   getEffectiveBackendUrl,
   cloudRunUpdateCoins,
   cloudRunUpdateVip,
   cloudRunMassCoins,
   cloudRunPromoteAllVip,
+  setAuthToken,
+  clearAuthToken,
+  getAuthToken,
+  getAuthHeaders,
+  claimTestPassOnServer,
+  registerUserOnServer,
+  updatePasswordOnServer,
+  toggleAdminRoleOnServer,
 } from './socketClient';
 import {
   encryptPassword,
-  isPasswordEncrypted,
   verifyPassword,
 } from './security';
 
@@ -190,22 +194,26 @@ export function resetSingleAccountPassLock(username: string): boolean {
   return false;
 }
 
-export function getMySavedAccounts(): (UserAccount & { passwordHash: string })[] {
+export function getMySavedAccounts(): UserAccount[] {
   try {
     const raw = localStorage.getItem(MY_ACCOUNTS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Strip any legacy passwordHash if present in older localStorage entries
+    return parsed.map(({ passwordHash: _ph, ...rest }) => rest);
   } catch {
     return [];
   }
 }
 
-export function saveToMyAccounts(account: UserAccount & { passwordHash: string }) {
+export function saveToMyAccounts(account: UserAccount) {
   try {
+    const { passwordHash: _ph, ...safeAccount } = account as UserAccount & { passwordHash?: string };
     const existing = getMySavedAccounts();
     const updated = [
-      account,
-      ...existing.filter((a) => a.username.toLowerCase() !== account.username.toLowerCase()),
+      safeAccount,
+      ...existing.filter((a) => a.username.toLowerCase() !== safeAccount.username.toLowerCase()),
     ];
     localStorage.setItem(MY_ACCOUNTS_KEY, JSON.stringify(updated));
   } catch (e) {
@@ -213,9 +221,7 @@ export function saveToMyAccounts(account: UserAccount & { passwordHash: string }
   }
 }
 
-// Seed default users including the primary admin account
 const ADMIN_USERNAME = 'Pebblesthepenguinishaany83';
-const ADMIN_PASSWORD = 'Pebblesthepenguinneedsagepoop';
 
 type StoredUserRecord = {
   username?: string;
@@ -247,405 +253,11 @@ type StoredUserRecord = {
   penguinFeedCount?: number;
 };
 
-const DEFAULT_USERS: Record<string, StoredUserRecord> = {
-  [ADMIN_USERNAME.toLowerCase()]: {
-    passwordHash: ADMIN_PASSWORD,
-    name: 'Pebbles (Ishaan)',
-    email: 'ishaany83@gmail.com',
-    createdAt: '2026-09-22T00:16:31.626Z',
-    lastLogin: '2026-09-22T00:23:33.794Z',
-    isAdmin: true,
-    isVip: true,
-    vipLevel: 'Diamond',
-    loginStreak: 1,
-    lastStreakDate: '2026-09-21',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-    unlockedTrophyIds: ['vip_unlocked'],
-  },
-  test_pass_alpha: {
-    passwordHash: 'testpass123',
-    name: 'Alpha Tester Pass #1',
-    email: 'alpha@gameland.test',
-    createdAt: '2026-09-21T18:00:59.503Z',
-    lastLogin: '2026-09-21T18:00:59.503Z',
-    isAdmin: false,
-    isTestAccount: true,
-    testAccountUsed: false,
-  },
-  test_pass_beta: {
-    passwordHash: 'testpass123',
-    name: 'Beta Tester Pass #2',
-    email: 'beta@gameland.test',
-    createdAt: '2026-09-21T18:00:59.503Z',
-    lastLogin: '2026-09-21T18:00:59.503Z',
-    isAdmin: false,
-    isTestAccount: true,
-    testAccountUsed: false,
-  },
-  test_pass_vip: {
-    passwordHash: 'testpass123',
-    name: 'VIP Guest Pass #3',
-    email: 'vip@gameland.test',
-    createdAt: '2026-09-21T18:00:59.503Z',
-    lastLogin: '2026-09-21T18:00:59.503Z',
-    isAdmin: false,
-    isTestAccount: true,
-    testAccountUsed: false,
-    isVip: true,
-    vipLevel: 'Gold',
-    vipGrantedAt: '2026-09-21T18:00:59.503Z',
-  },
-  gamer: {
-    passwordHash: 'gameland123',
-    name: 'Alex Gamer',
-    email: 'gamer@gameland.com',
-    createdAt: '2026-08-25T16:23:14.638Z',
-    lastLogin: '2026-08-25T16:23:14.638Z',
-    isAdmin: false,
-    points: 260,
-  },
-  pebbles: {
-    passwordHash: 'penguin2026',
-    name: 'Penguin Pebbles',
-    email: 'pebbles@gameland.com',
-    createdAt: '2026-08-25T16:23:14.638Z',
-    lastLogin: '2026-08-25T16:23:14.638Z',
-    isAdmin: false,
-    points: 260,
-  },
-  moksh: {
-    passwordHash: 'Sabers5759',
-    name: 'moksh',
-    email: 'Moksh.Kakarla@franklinsabers.org',
-    createdAt: '2026-09-03T16:57:44.273Z',
-    lastLogin: '2026-09-03T16:57:44.273Z',
-    points: 14,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'play_5_games', 'playtime_10m'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-09',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-  },
-  helloooooooo: {
-    passwordHash: 'rata',
-    name: 'Jackson',
-    email: 'jackson.mauga@franklinsabers.org',
-    createdAt: '2026-09-03T17:04:46.914Z',
-    lastLogin: '2026-09-03T17:04:46.914Z',
-    points: 15,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'playtime_10m', 'playtime_30m', 'streak_3d', 'play_5_games'],
-    loginStreak: 3,
-    lastStreakDate: '2026-09-09',
-    hasPenguinBadge: true,
-    mysteryGifts: [],
-    purchasedItemIds: ['store-mystery-box'],
-    activeProfileFrame: 'ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900 shadow-lg shadow-amber-500/50 animate-pulse',
-    unlockedTitles: ['Ice Explorer Title'],
-  },
-  guy333: {
-    passwordHash: 'Sabers5622',
-    name: 'Alex',
-    email: 'alexander.romo@franklinsabers.org',
-    createdAt: '2026-09-09T19:35:51.154Z',
-    lastLogin: '2026-09-09T19:35:51.154Z',
-    points: 11,
-    unlockedTrophyIds: ['first_game'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-09',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-  },
-  gdkid: {
-    passwordHash: 'HIII',
-    name: 'GDKID',
-    email: 'dalakjdfhkajdfhlk@gmail.com',
-    createdAt: '2026-08-25T16:47:26.212Z',
-    lastLogin: '2026-08-25T16:52:58.693Z',
-    points: 265,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'vip_unlocked'],
-    loginStreak: 1,
-    lastStreakDate: '2026-08-25',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-    isAdmin: false,
-    isVip: true,
-    vipLevel: 'Gold',
-    vipGrantedAt: '2026-08-25T16:51:23.073Z',
-  },
-  vip_member_3339: {
-    passwordHash: 'vippass123',
-    name: 'VIP Gold Player #3339',
-    email: 'vip_3339@gameland.vip',
-    createdAt: '2026-08-25T16:51:50.525Z',
-    lastLogin: '2026-08-25T16:51:50.525Z',
-    isAdmin: false,
-    isVip: true,
-    vipLevel: 'Gold',
-    vipGrantedAt: '2026-08-25T16:51:50.525Z',
-  },
-  gamerthegamemcbooootay: {
-    passwordHash: 'Password',
-    name: 'Fart McBooty',
-    email: 'butt.yayyy@gmail.com',
-    createdAt: '2026-09-09T19:37:39.526Z',
-    lastLogin: '2026-09-09T19:37:39.526Z',
-    points: 13,
-    unlockedTrophyIds: ['first_game'],
-    loginStreak: 2,
-    lastStreakDate: '2026-09-10',
-    hasPenguinBadge: true,
-    mysteryGifts: [],
-    avatar: 'gamer',
-  },
-  gunveersingh: {
-    passwordHash: 'Gunveer',
-    name: 'Gunveer Singh',
-    email: 'Gunveer.Singh@FranklinSabers.org',
-    createdAt: '2026-08-25T16:56:42.890Z',
-    lastLogin: '2026-08-25T16:56:42.890Z',
-    loginStreak: 1,
-    lastStreakDate: '2026-09-09',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-    avatar: 'ninja',
-    points: 11,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'playtime_10m'],
-  },
-  easton: {
-    passwordHash: 'Easton22!',
-    name: 'Easton',
-    email: 'eaton.gray@franklinsabers.org',
-    createdAt: '2026-09-09T19:39:35.528Z',
-    lastLogin: '2026-09-09T19:39:35.528Z',
-    points: 12,
-    unlockedTrophyIds: ['first_game'],
-    loginStreak: 2,
-    lastStreakDate: '2026-09-10',
-    hasPenguinBadge: true,
-    mysteryGifts: [],
-    isVip: true,
-    vipLevel: 'Gold',
-    vipGrantedAt: '2026-09-10T16:29:34.811Z',
-  },
-  everett: {
-    passwordHash: '3133',
-    name: 'everett',
-    email: 'everett.zielinski@franklinsabers.org',
-    createdAt: '2026-09-09T19:42:25.057Z',
-    lastLogin: '2026-09-09T19:42:25.057Z',
-    points: 12,
-    unlockedTrophyIds: ['first_game', 'playtime_1m'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-09',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-    isVip: true,
-    vipLevel: 'Gold',
-    vipGrantedAt: '2026-09-09T19:51:15.372Z',
-    avatar: 'classic',
-  },
-  esmr: {
-    passwordHash: 'ghiodshsfh',
-    name: 'Esmr',
-    email: 'esme.priestaf@franklinsabers.org',
-    createdAt: '2026-09-09T19:52:26.895Z',
-    lastLogin: '2026-09-09T19:52:26.895Z',
-    points: 11,
-    unlockedTrophyIds: ['first_game'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-10',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-    avatar: 'king',
-  },
-  rsmr: {
-    passwordHash: '123456789',
-    name: 'Rsmr',
-    email: 'reya.mees@franklinsabers.org',
-    createdAt: '2026-09-09T19:52:55.081Z',
-    lastLogin: '2026-09-09T19:52:55.081Z',
-    points: 12,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'playtime_10m'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-10',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-  },
-  vip_member_9144: {
-    passwordHash: 'vippass123',
-    name: 'VIP Gold Player #9144',
-    email: 'vip_9144@gameland.vip',
-    createdAt: '2026-09-09T19:54:05.797Z',
-    lastLogin: '2026-09-09T19:54:05.797Z',
-    isAdmin: false,
-    isVip: true,
-    vipLevel: 'Gold',
-    vipGrantedAt: '2026-09-09T19:54:05.797Z',
-  },
-  imdagoat: {
-    passwordHash: '123456789987654321',
-    name: 'Allison Gannon',
-    email: 'allison.gannon@franklinsabers.org',
-    createdAt: '2026-09-10T16:11:53.481Z',
-    lastLogin: '2026-09-10T16:11:53.481Z',
-    points: 11,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'playtime_10m'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-10',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-  },
-  tyler: {
-    passwordHash: 'Sabers7021',
-    name: 'tyler',
-    email: 'tyler.nelson@franklin.com',
-    createdAt: '2026-09-10T16:13:41.426Z',
-    lastLogin: '2026-09-10T16:13:41.426Z',
-    points: 12,
-    unlockedTrophyIds: ['first_game', 'playtime_1m'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-10',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-  },
-  landon: {
-    passwordHash: 'stinkycostco2015',
-    name: 'l.g',
-    email: 'landon.gannon@franklinsabers.org',
-    createdAt: '2026-09-10T16:25:11.221Z',
-    lastLogin: '2026-09-10T16:25:11.221Z',
-    points: 11,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'playtime_10m'],
-  },
-  gru: {
-    passwordHash: 'Sabers2458',
-    name: 'gru',
-    email: 'scarlett.stamborski@franklinsabers.org',
-    createdAt: '2026-09-11T16:35:20.713Z',
-    lastLogin: '2026-09-11T16:35:20.713Z',
-    points: 14,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'play_5_games'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-18',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-  },
-  gfvbyfrbv: {
-    passwordHash: 'win1',
-    name: 'wahgfdx',
-    email: 'waleed.raed@franklinsabers.org',
-    createdAt: '2026-09-11T16:43:31.747Z',
-    lastLogin: '2026-09-11T16:43:31.747Z',
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'playtime_10m'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-11',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-    points: 11,
-    avatar: 'classic',
-  },
-  sabers6414: {
-    passwordHash: '523247',
-    name: 'firewolf',
-    email: 'logan.gradall@franklinsabers.org',
-    createdAt: '2026-09-11T19:44:33.038Z',
-    lastLogin: '2026-09-11T19:44:33.038Z',
-    points: 11,
-    unlockedTrophyIds: ['first_game'],
-    purchasedItemIds: ['store-title-monarch'],
-    unlockedTitles: ['Penguin Monarch 👑'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-14',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-  },
-  life: {
-    passwordHash: '1156',
-    name: 'Emilia',
-    email: 'emilia.awe@franklinsabers.org',
-    createdAt: '2026-09-11T19:53:41.337Z',
-    lastLogin: '2026-09-11T19:53:41.337Z',
-    points: 13,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'playtime_10m'],
-    loginStreak: 2,
-    lastStreakDate: '2026-09-18',
-    hasPenguinBadge: true,
-    mysteryGifts: [],
-  },
-  girl23: {
-    passwordHash: '1234',
-    name: 'Tocool4u',
-    email: 'ishwarya.suresh@franklinsabers.org',
-    createdAt: '2026-09-11T19:54:52.333Z',
-    lastLogin: '2026-09-11T19:54:52.333Z',
-    points: 11,
-    unlockedTrophyIds: ['first_game'],
-    loginStreak: 1,
-    lastStreakDate: '2026-09-18',
-    hasPenguinBadge: false,
-    mysteryGifts: [],
-  },
-  kingboy: {
-    passwordHash: '1234',
-    name: 'kingboy',
-    email: 'Kousthub.nethi@frankilnsabers.org',
-    createdAt: '2026-09-12T16:11:42.249Z',
-    lastLogin: '2026-09-12T16:11:42.249Z',
-    points: 11,
-    unlockedTrophyIds: ['first_game'],
-  },
-  pky: {
-    passwordHash: 'Qwert!23456',
-    name: 'PKY',
-    email: 'pravinky@gmail.com',
-    createdAt: '2026-08-09T01:08:22.112Z',
-    lastLogin: '2026-08-09T14:38:53.031Z',
-    loginStreak: 2,
-    lastStreakDate: '2026-08-09',
-    hasPenguinBadge: true,
-    mysteryGifts: [],
-    points: 135,
-  },
-  micah9081: {
-    passwordHash: '2301',
-    name: 'Micah Romo',
-    email: 'micah.romo@franklinsabers.org',
-    createdAt: '2026-09-13T23:32:37.296Z',
-    lastLogin: '2026-09-13T23:32:37.296Z',
-    points: 11,
-    unlockedTrophyIds: ['first_game', 'playtime_1m', 'playtime_10m', 'playtime_30m'],
-    loginStreak: 2,
-    lastStreakDate: '2026-09-14',
-    hasPenguinBadge: true,
-    mysteryGifts: [],
-    purchasedItemIds: ['store-mystery-mega'],
-    unlockedTitles: ['Arctic Champion Title'],
-  },
-  notwesley: {
-    passwordHash: 'Sabers9451',
-    name: 'NotWesley',
-    email: 'wesley.eifler@franklinsabers.org',
-    createdAt: '2026-09-22T00:23:00.044Z',
-    lastLogin: '2026-09-22T00:23:00.044Z',
-    username: 'NotWesley',
-    isAdmin: false,
-    isVip: true,
-    vipLevel: 'Diamond',
-    vipGrantedAt: '2026-09-22T00:23:59.743Z',
-  },
-};
-
-// Guarantee all default users in codebase have encrypted passwords
-Object.keys(DEFAULT_USERS).forEach((key) => {
-  if (DEFAULT_USERS[key].passwordHash && !isPasswordEncrypted(DEFAULT_USERS[key].passwordHash)) {
-    DEFAULT_USERS[key].passwordHash = encryptPassword(DEFAULT_USERS[key].passwordHash);
-  }
-});
+const DEFAULT_USERS: Record<string, StoredUserRecord> = {};
 
 export function hasDeviceUsedTestAccount(): boolean {
   if (isPassLimitOverrideActive()) {
-    return false; // Pass limit override is active -> bypass device restriction
+    return false;
   }
   try {
     return localStorage.getItem(DEVICE_USED_TEST_KEY) === 'true';
@@ -665,76 +277,19 @@ export function resetDeviceTestAccountFlag(): void {
 export function getStoredUsers(): Record<string, StoredUserRecord> {
   try {
     const raw = localStorage.getItem(USERS_KEY);
-    let users = raw ? JSON.parse(raw) : { ...DEFAULT_USERS };
-    let needsSave = false;
-
-    // Guarantee every user in storage has an encrypted password
-    Object.keys(users).forEach((key) => {
-      const u = users[key];
-      if (u && u.passwordHash && !isPasswordEncrypted(u.passwordHash)) {
-        u.passwordHash = encryptPassword(u.passwordHash);
-        needsSave = true;
-      }
-    });
-    
-    // Always ensure the admin account exists with the designated password & admin flag
-    const adminKey = ADMIN_USERNAME.toLowerCase();
-    const adminEncrypted = encryptPassword(ADMIN_PASSWORD);
-    if (!users[adminKey]) {
-      users[adminKey] = { ...DEFAULT_USERS[adminKey], passwordHash: adminEncrypted };
-      needsSave = true;
-    } else {
-      if (!users[adminKey].email) {
-        users[adminKey].email = 'ishaany83@gmail.com';
-        needsSave = true;
-      }
-      if (!users[adminKey].name) {
-        users[adminKey].name = 'Pebbles (Ishaan)';
-        needsSave = true;
-      }
-      if (!isPasswordEncrypted(users[adminKey].passwordHash) || !verifyPassword(ADMIN_PASSWORD, users[adminKey].passwordHash)) {
-        users[adminKey].passwordHash = adminEncrypted;
-        users[adminKey].isAdmin = true;
-        needsSave = true;
-      }
-    }
-
-    // Ensure all restored users are seeded into storage if missing
-    Object.keys(DEFAULT_USERS).forEach((key) => {
-      if (!users[key]) {
-        users[key] = { ...DEFAULT_USERS[key] };
-        needsSave = true;
-      }
-    });
-    if (needsSave) saveUsers(users);
-
-    return users;
+    return raw ? JSON.parse(raw) : { ...DEFAULT_USERS };
   } catch {
-    return { ...DEFAULT_USERS };
+    return {};
   }
 }
 
 export function saveUsers(users: Record<string, StoredUserRecord>) {
   try {
-    // Encrypt any plaintext passwords before writing to localStorage or network
-    Object.keys(users).forEach((key) => {
-      const u = users[key];
-      if (u && u.passwordHash && !isPasswordEncrypted(u.passwordHash)) {
-        u.passwordHash = encryptPassword(u.passwordHash);
-      }
-    });
-
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gameland_users_updated', { detail: users }));
-      emitSocketUsersSync(users);
-      const backend = getEffectiveBackendUrl();
-      if (backend) {
-        fetch(`${backend}/api/users/sync`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ users }),
-        }).catch(() => {});
+      if (getAuthToken()) {
+        emitSocketUsersSync(users);
       }
     }
   } catch (e) {
@@ -743,9 +298,14 @@ export function saveUsers(users: Record<string, StoredUserRecord>) {
 }
 
 export async function syncUsersWithServer(): Promise<Record<string, StoredUserRecord>> {
+  if (!getAuthToken()) {
+    return getStoredUsers();
+  }
   const backend = getEffectiveBackendUrl();
   try {
-    const res = await fetch(`${backend}/api/users`);
+    const res = await fetch(`${backend}/api/users`, {
+      headers: getAuthHeaders(),
+    });
     if (res.ok) {
       const serverUsers = await res.json();
       if (serverUsers && typeof serverUsers === 'object') {
@@ -754,11 +314,9 @@ export async function syncUsersWithServer(): Promise<Record<string, StoredUserRe
         Object.entries(serverUsers).forEach(([key, sUser]) => {
           const lowerKey = key.toLowerCase();
           if (sUser && typeof sUser === 'object') {
-            const incomingPass = (sUser as any).passwordHash || (sUser as any).password;
             merged[lowerKey] = {
               ...(merged[lowerKey] || {}),
               ...(sUser as StoredUserRecord),
-              passwordHash: incomingPass ? (isPasswordEncrypted(incomingPass) ? incomingPass : encryptPassword(incomingPass)) : (merged[lowerKey] && merged[lowerKey].passwordHash),
             };
           }
         });
@@ -767,7 +325,7 @@ export async function syncUsersWithServer(): Promise<Record<string, StoredUserRe
         return merged;
       }
     }
-  } catch (e) {
+  } catch {
     // Network fallback
   }
   return getStoredUsers();
@@ -825,11 +383,68 @@ export function setCurrentSessionUser(user: UserAccount | null) {
   }
 }
 
+export async function registerAccountAsync(
+  usernameInput: string,
+  passwordInput: string,
+  nameInput?: string,
+  emailInput?: string,
+  adoptSession: boolean = true
+): Promise<{ success: boolean; error?: string; user?: UserAccount }> {
+  const username = usernameInput.trim();
+  const password = passwordInput.trim();
+  const name = nameInput?.trim() || undefined;
+  const email = emailInput?.trim() || undefined;
+
+  if (!username || username.length < 3 || username.length > 32) {
+    return { success: false, error: 'Username must be between 3 and 32 characters.' };
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    return { success: false, error: 'Username can only contain letters, numbers, and underscores.' };
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { success: false, error: 'Please enter a valid email address.' };
+  }
+  if (!password || password.length < 4) {
+    return { success: false, error: 'Password must be at least 4 characters long.' };
+  }
+
+  const serverRes = await registerUserOnServer({ username, password, name, email });
+  if (serverRes.success && serverRes.user) {
+    if (adoptSession && serverRes.token) {
+      setAuthToken(serverRes.token);
+    }
+    const users = getStoredUsers();
+    const lowerKey = username.toLowerCase();
+    users[lowerKey] = {
+      ...serverRes.user,
+      passwordHash: '',
+    };
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    window.dispatchEvent(new CustomEvent('gameland_users_updated', { detail: users }));
+
+    const newUser: UserAccount = serverRes.user;
+    if (adoptSession) {
+      setCurrentSessionUser(newUser);
+      saveToMyAccounts(newUser);
+    }
+    return { success: true, user: newUser };
+  }
+
+  // If server explicitly rejected duplicate / validation, return its error without silent override
+  if (serverRes.status && serverRes.status >= 400 && serverRes.status < 500) {
+    return { success: false, error: serverRes.error || 'Registration failed.' };
+  }
+
+  // Offline fallback when server is unreachable
+  return registerAccount(usernameInput, passwordInput, nameInput, emailInput, adoptSession);
+}
+
 export function registerAccount(
   usernameInput: string,
   passwordInput: string,
   nameInput?: string,
-  emailInput?: string
+  emailInput?: string,
+  adoptSession: boolean = true
 ): { success: boolean; error?: string; user?: UserAccount } {
   const username = usernameInput.trim();
   const password = passwordInput.trim();
@@ -867,33 +482,7 @@ export function registerAccount(
     lastLogin: now,
   };
   users[lowerKey] = userRec;
-
   saveUsers(users);
-
-  // Broadcast single user registration to all other connected clients
-  emitSocketUserRegister({
-    username,
-    ...userRec,
-    passwordHash: encryptedPassword,
-  });
-
-  const backend = getEffectiveBackendUrl();
-  if (typeof window !== 'undefined' && backend) {
-    fetch(`${backend}/api/users/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username,
-        user: {
-          username,
-          ...userRec,
-          passwordHash: encryptedPassword,
-        },
-      }),
-    }).catch((err) => {
-      console.warn('Backend user registration sync standby:', err);
-    });
-  }
 
   const newUser: UserAccount = {
     username,
@@ -903,16 +492,10 @@ export function registerAccount(
     lastLogin: now,
   };
 
-  setCurrentSessionUser(newUser);
-  saveToMyAccounts({
-    username,
-    name,
-    email,
-    createdAt: now,
-    lastLogin: now,
-    isAdmin: false,
-    passwordHash: encryptedPassword,
-  });
+  if (adoptSession) {
+    setCurrentSessionUser(newUser);
+    saveToMyAccounts(newUser);
+  }
   return { success: true, user: newUser };
 }
 
@@ -928,15 +511,14 @@ export function loginAccount(usernameInput: string, passwordInput: string): { su
   const lowerKey = username.toLowerCase();
   const record = users[lowerKey];
 
-  if (!record) {
-    return { success: false, error: 'Account not found. Please check your username or sign up for a new account.' };
+  if (!record || !record.passwordHash) {
+    return { success: false, error: 'Account not found or requires online server verification.' };
   }
 
   if (!verifyPassword(password, record.passwordHash)) {
     return { success: false, error: 'Incorrect password. Please try again.' };
   }
 
-  // Single-use test account validation
   if (record.isTestAccount && !isPassLimitOverrideActive()) {
     if (hasDeviceUsedTestAccount()) {
       const active = getCurrentSessionUser();
@@ -958,7 +540,6 @@ export function loginAccount(usernameInput: string, passwordInput: string): { su
       }
     }
 
-    // Mark test account as consumed
     record.testAccountUsed = true;
     if (!record.testAccountUsedAt) {
       record.testAccountUsedAt = new Date().toISOString();
@@ -975,18 +556,18 @@ export function loginAccount(usernameInput: string, passwordInput: string): { su
   saveUsers(users);
 
   const user: UserAccount = {
-    username: username, // Keep case from user input or original registration
+    username,
     name: record.name,
     email: record.email,
     createdAt: record.createdAt,
     lastLogin: now,
-    isAdmin: record.isAdmin || lowerKey === ADMIN_USERNAME.toLowerCase(),
+    isAdmin: !!record.isAdmin,
     avatar: record.avatar,
     isTestAccount: record.isTestAccount,
     testAccountUsed: record.testAccountUsed,
     testAccountUsedAt: record.testAccountUsedAt,
-    isVip: record.isVip || lowerKey === ADMIN_USERNAME.toLowerCase(),
-    vipLevel: record.vipLevel || (lowerKey === ADMIN_USERNAME.toLowerCase() ? 'Diamond' : undefined),
+    isVip: !!record.isVip,
+    vipLevel: record.vipLevel,
     vipGrantedAt: record.vipGrantedAt,
     loginStreak: record.loginStreak || 1,
     lastStreakDate: record.lastStreakDate,
@@ -996,13 +577,11 @@ export function loginAccount(usernameInput: string, passwordInput: string): { su
     snacksInventory: record.snacksInventory || {},
     penguinHappiness: record.penguinHappiness ?? 85,
     penguinFeedCount: record.penguinFeedCount ?? 0,
+    points: record.points ?? 10,
   };
 
   setCurrentSessionUser(user);
-  saveToMyAccounts({
-    ...user,
-    passwordHash: record.passwordHash,
-  });
+  saveToMyAccounts(user);
   return { success: true, user };
 }
 
@@ -1010,48 +589,64 @@ export async function loginAccountAsync(
   usernameInput: string,
   passwordInput: string
 ): Promise<{ success: boolean; error?: string; user?: UserAccount }> {
-  let result = loginAccount(usernameInput, passwordInput);
-  if (!result.success) {
-    try {
-      await syncUsersWithServer();
-      result = loginAccount(usernameInput, passwordInput);
-    } catch {
-      // Backend standby fallback
-    }
+  const username = usernameInput.trim();
+  const password = passwordInput.trim();
 
-    // If still not logged in, attempt direct authoritative login with the backend API
-    if (!result.success) {
-      try {
-        const backend = getEffectiveBackendUrl();
-        if (backend) {
-          const res = await fetch(`${backend}/api/users/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: usernameInput, password: passwordInput }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && data.user) {
-              const users = getStoredUsers();
-              const key = usernameInput.toLowerCase();
-              users[key] = {
-                ...data.user,
-                passwordHash: data.user.passwordHash || encryptPassword(passwordInput),
-              };
-              saveUsers(users);
-              return loginAccount(usernameInput, passwordInput);
-            }
-          }
-        }
-      } catch {
-        // Fallback
-      }
-    }
+  if (!username || !password) {
+    return { success: false, error: 'Please enter both username and password.' };
   }
-  return result;
+
+  try {
+    const backend = getEffectiveBackendUrl();
+    if (backend) {
+      const res = await fetch(`${backend}/api/users/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success && data.user && data.token) {
+        setAuthToken(data.token);
+        const key = username.toLowerCase();
+        const users = getStoredUsers();
+        users[key] = {
+          ...(users[key] || {}),
+          ...data.user,
+          passwordHash: '',
+        };
+        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        window.dispatchEvent(new CustomEvent('gameland_users_updated', { detail: users }));
+
+        const signedInUser: UserAccount = {
+          ...data.user,
+          loginStreak: data.user.loginStreak || 1,
+          hasPenguinBadge: data.user.hasPenguinBadge || (data.user.loginStreak ? data.user.loginStreak >= 2 : false),
+          mysteryGifts: data.user.mysteryGifts || [],
+          snacksInventory: data.user.snacksInventory || {},
+          penguinHappiness: data.user.penguinHappiness ?? 85,
+          penguinFeedCount: data.user.penguinFeedCount ?? 0,
+          points: data.user.points ?? 10,
+        };
+        setCurrentSessionUser(signedInUser);
+        saveToMyAccounts(signedInUser);
+        return { success: true, user: signedInUser };
+      }
+
+      return {
+        success: false,
+        error: data?.error || 'Invalid username or password.',
+      };
+    }
+  } catch {
+    // Offline fallback only when server is unreachable
+  }
+
+  return loginAccount(usernameInput, passwordInput);
 }
 
 export function logoutAccount() {
+  clearAuthToken();
   setCurrentSessionUser(null);
 }
 
@@ -1068,7 +663,7 @@ export function getAllUserRecords(): (UserAccount & { passwordHash: string })[] 
     vipLevel: record.vipLevel || (key === ADMIN_USERNAME.toLowerCase() ? 'Diamond' : undefined),
     vipGrantedAt: record.vipGrantedAt,
     avatar: record.avatar,
-    passwordHash: record.passwordHash,
+    passwordHash: '',
     isTestAccount: record.isTestAccount,
     testAccountUsed: record.testAccountUsed,
     testAccountUsedAt: record.testAccountUsedAt,
@@ -1168,12 +763,14 @@ export function promoteAllUsersToVip(level: 'Gold' | 'Diamond' | 'Platinum' | 'V
   }
 }
 
-export function generateNewVipAccount(level: 'Gold' | 'Diamond' | 'Platinum' | 'VIP' = 'Gold'): UserAccount & { passwordHash: string } {
+export function generateNewVipAccount(
+  level: 'Gold' | 'Diamond' | 'Platinum' | 'VIP' = 'Gold'
+): UserAccount & { passwordHash: string; tempPassword: string } {
   const users = getStoredUsers();
   const randomId = Math.floor(1000 + Math.random() * 9000);
   const username = `vip_member_${randomId}`;
   const now = new Date().toISOString();
-  const pass = 'vippass123';
+  const pass = `Vip-${Math.random().toString(36).slice(2, 10)}!`;
   const encryptedPass = encryptPassword(pass);
 
   users[username] = {
@@ -1200,7 +797,8 @@ export function generateNewVipAccount(level: 'Gold' | 'Diamond' | 'Platinum' | '
     isVip: true,
     vipLevel: level,
     vipGrantedAt: now,
-    passwordHash: encryptedPass,
+    passwordHash: '',
+    tempPassword: pass,
   };
 }
 
@@ -1216,6 +814,9 @@ export function updateUserPassword(username: string, newPassword: string): boole
   if (!users[key]) return false;
   users[key].passwordHash = encryptPassword(newPassword);
   saveUsers(users);
+  if (getAuthToken()) {
+    updatePasswordOnServer(key, newPassword);
+  }
   return true;
 }
 
@@ -1226,8 +827,12 @@ export function toggleUserAdminStatus(username: string): boolean {
   const users = getStoredUsers();
   const key = username.toLowerCase();
   if (!users[key]) return false;
-  users[key].isAdmin = !users[key].isAdmin;
+  const nextAdmin = !users[key].isAdmin;
+  users[key].isAdmin = nextAdmin;
   saveUsers(users);
+  if (getAuthToken()) {
+    toggleAdminRoleOnServer(key, nextAdmin);
+  }
   return true;
 }
 
@@ -1290,10 +895,7 @@ export function updateUserAvatar(username: string, avatarId: string): UserAccoun
     setCurrentSessionUser(updatedSession);
 
     // Also update saved account in my saved accounts list
-    saveToMyAccounts({
-      ...updatedSession,
-      passwordHash: users[key].passwordHash,
-    });
+    saveToMyAccounts(updatedSession);
 
     return updatedSession;
   }
@@ -1313,11 +915,41 @@ export function getTestAccountsList(): (UserAccount & { passwordHash: string; us
       lastLogin: record.lastLogin,
       isAdmin: false,
       avatar: record.avatar,
-      passwordHash: record.passwordHash,
+      passwordHash: '',
       isTestAccount: true,
       used: !!record.testAccountUsed,
       usedAt: record.testAccountUsedAt,
     }));
+}
+
+export async function claimOneTimeTestAccountAsync(): Promise<{ success: boolean; error?: string; user?: UserAccount }> {
+  if (hasDeviceUsedTestAccount()) {
+    return {
+      success: false,
+      error: 'You have already used your 1-time test account pass on this browser. Test account passes are strictly limited to one use per user.',
+    };
+  }
+
+  const serverRes = await claimTestPassOnServer();
+  if (serverRes.success && serverRes.user && serverRes.token) {
+    setAuthToken(serverRes.token);
+    try {
+      localStorage.setItem(DEVICE_USED_TEST_KEY, 'true');
+    } catch (e) {
+      console.error('Failed to set device test account flag', e);
+    }
+    const users = getStoredUsers();
+    const key = serverRes.user.username.toLowerCase();
+    users[key] = { ...serverRes.user, passwordHash: '' };
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    window.dispatchEvent(new CustomEvent('gameland_users_updated', { detail: users }));
+
+    setCurrentSessionUser(serverRes.user);
+    saveToMyAccounts(serverRes.user);
+    return { success: true, user: serverRes.user };
+  }
+
+  return claimOneTimeTestAccount();
 }
 
 export function claimOneTimeTestAccount(): { success: boolean; error?: string; user?: UserAccount } {
@@ -1329,19 +961,16 @@ export function claimOneTimeTestAccount(): { success: boolean; error?: string; u
   }
 
   const users = getStoredUsers();
-  
-  // Find an available unused test account
   let testKey = Object.keys(users).find(
     (k) => users[k].isTestAccount && (!users[k].testAccountUsed || isPassLimitOverrideActive())
   );
 
-  // If no preset test accounts are free, create a new one dynamically
   if (!testKey) {
     const randomId = Math.floor(1000 + Math.random() * 9000);
     testKey = `test_pass_${randomId}`;
     const now = new Date().toISOString();
     users[testKey] = {
-      passwordHash: 'testpass123',
+      passwordHash: encryptPassword(`guest_${randomId}_${now}`),
       name: `Single-Use Test Pass #${randomId}`,
       email: `test_${randomId}@gameland.test`,
       createdAt: now,
@@ -1380,10 +1009,7 @@ export function claimOneTimeTestAccount(): { success: boolean; error?: string; u
   };
 
   setCurrentSessionUser(user);
-  saveToMyAccounts({
-    ...user,
-    passwordHash: record.passwordHash,
-  });
+  saveToMyAccounts(user);
 
   return { success: true, user };
 }
@@ -1400,12 +1026,14 @@ export function resetAllTestAccountsAdmin(): void {
   resetDeviceTestAccountFlag();
 }
 
-export function generateNewTestPass(nameInput?: string): UserAccount & { passwordHash: string } {
+export function generateNewTestPass(
+  nameInput?: string
+): UserAccount & { passwordHash: string; tempPassword: string } {
   const users = getStoredUsers();
   const randomId = Math.floor(1000 + Math.random() * 9000);
   const username = `test_pass_${randomId}`;
   const now = new Date().toISOString();
-  const pass = 'testpass123';
+  const pass = `Pass-${Math.random().toString(36).slice(2, 10)}!`;
   const encryptedPass = encryptPassword(pass);
 
   users[username] = {
@@ -1430,7 +1058,8 @@ export function generateNewTestPass(nameInput?: string): UserAccount & { passwor
     isAdmin: false,
     isTestAccount: true,
     testAccountUsed: false,
-    passwordHash: encryptedPass,
+    passwordHash: '',
+    tempPassword: pass,
   };
 }
 
@@ -2715,9 +2344,4 @@ export function adminRejectVipOrderByUsername(targetUsername: string): boolean {
   return true;
 }
 
-// Auto-sync users database with backend server on module load
-if (typeof window !== 'undefined') {
-  fetchServerUsersSync();
-}
-
-
+// Users sync only occurs after authenticated sign-in via socketClient

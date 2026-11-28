@@ -52,6 +52,7 @@ import {
   ShieldAlert,
   Timer,
   UserX,
+  Radio,
 } from 'lucide-react';
 import { Game, CategoryType } from '../types';
 import {
@@ -101,7 +102,7 @@ import {
   deleteUserAccount,
   updateUserPassword,
   toggleUserAdminStatus,
-  registerAccount,
+  registerAccountAsync,
   UserAccount,
   resetAllTestAccountsAdmin,
   generateNewTestPass,
@@ -128,6 +129,11 @@ import {
   resetAllLeaderboardsToZero,
   resetGameLeaderboardToZero,
 } from '../utils/leaderboards';
+import {
+  OnlineUserInfo,
+  getSocketOnlineUsersList,
+  fetchOnlineUsersFromServer,
+} from '../utils/socketClient';
 
 interface AdminControlModalProps {
   isOpen: boolean;
@@ -206,11 +212,12 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
 
   // Users state
   const [usersList, setUsersList] = useState<(UserAccount & { passwordHash: string })[]>([]);
+  const [onlineUsersList, setOnlineUsersList] = useState<OnlineUserInfo[]>(() => getSocketOnlineUsersList());
   const [userSearch, setUserSearch] = useState('');
   const [editingUserPass, setEditingUserPass] = useState<string | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [userMsg, setUserMsg] = useState('');
-  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'vip'>('all');
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'online' | 'vip'>('all');
 
   // Add User Form
   const [showAddUserForm, setShowAddUserForm] = useState(false);
@@ -295,7 +302,7 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
   const handleGenerateTestPass = () => {
     const newPass = generateNewTestPass();
     addAuditLog('users', `Generated new test pass account: ${newPass.username}`);
-    setUserMsg(`Created new test pass: Username "${newPass.username}", Password "testpass123" (Encrypted in database)`);
+    setUserMsg(`Created new test pass: Username "${newPass.username}", Temp Password "${newPass.tempPassword}"`);
     refreshData();
     setTimeout(() => setUserMsg(''), 6000);
   };
@@ -337,7 +344,7 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
   const handleGenerateVipAccount = (tier: 'Gold' | 'Diamond' | 'Platinum' = 'Gold') => {
     const acc = generateNewVipAccount(tier);
     addAuditLog('users', `Generated new VIP ${tier} account: ${acc.username}`);
-    setUserMsg(`Created VIP ${tier} Account: Username "${acc.username}", Password "vippass123" (Encrypted in database)`);
+    setUserMsg(`Created VIP ${tier} Account: Username "${acc.username}", Temp Password "${acc.tempPassword}"`);
     refreshData();
     setTimeout(() => setUserMsg(''), 6000);
   };
@@ -428,7 +435,11 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
 
     const escapeCsv = (val: unknown) => {
       if (val === null || val === undefined) return '""';
-      return `"${String(val).replace(/"/g, '""')}"`;
+      let str = String(val);
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
     };
 
     const rows = users.map((u) => [
@@ -460,35 +471,65 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
     setTimeout(() => setUserMsg(''), 3000);
   };
 
+  const escapeCsvCellSafe = (val: unknown) => {
+    if (val === null || val === undefined) return '""';
+    let str = String(val);
+    if (/^[=+\-@\t\r]/.test(str)) {
+      str = `'${str}`;
+    }
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
   const handleExportFeedbackCsv = () => {
     const list = getGameFeedbackList();
-    let csvContent = 'data:text/csv;charset=utf-8,ID,Game Title,Username,Feedback Type,Rating,Comment,Points Awarded,Status,Submitted At\n';
-    list.forEach((f) => {
-      csvContent += `"${f.id}","${f.gameTitle}","${f.username}","${f.feedbackType}",${f.rating},"${(f.comment || '').replace(/"/g, '""')}",${f.upfrontPoints || 0},"${f.status}","${f.submittedAt}"\n`;
-    });
-    const encodedUri = encodeURI(csvContent);
+    const header = 'ID,Game Title,Username,Feedback Type,Rating,Comment,Points Awarded,Status,Submitted At';
+    const rows = list.map((f) =>
+      [
+        escapeCsvCellSafe(f.id),
+        escapeCsvCellSafe(f.gameTitle),
+        escapeCsvCellSafe(f.username),
+        escapeCsvCellSafe(f.feedbackType),
+        escapeCsvCellSafe(f.rating),
+        escapeCsvCellSafe(f.comment || ''),
+        escapeCsvCellSafe(f.upfrontPoints || 0),
+        escapeCsvCellSafe(f.status),
+        escapeCsvCellSafe(f.submittedAt),
+      ].join(',')
+    );
+    const csvContent = '\uFEFF' + [header, ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `gameland-feedback-${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     addAuditLog('system', 'Exported game feedback to CSV');
   };
 
   const handleExportAuditLogsCsv = () => {
     const logs = getAuditLogs();
-    let csvContent = 'data:text/csv;charset=utf-8,Timestamp,Action,Category,Details\n';
-    logs.forEach((l) => {
-      csvContent += `"${l.timestamp}","${(l.action || '').replace(/"/g, '""')}","${l.category}","${(l.details || '').replace(/"/g, '""')}"\n`;
-    });
-    const encodedUri = encodeURI(csvContent);
+    const header = 'Timestamp,Action,Category,Details';
+    const rows = logs.map((l) =>
+      [
+        escapeCsvCellSafe(l.timestamp),
+        escapeCsvCellSafe(l.action || ''),
+        escapeCsvCellSafe(l.category),
+        escapeCsvCellSafe(l.details || ''),
+      ].join(',')
+    );
+    const csvContent = '\uFEFF' + [header, ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `gameland-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     addAuditLog('system', 'Exported audit logs to CSV');
   };
 
@@ -658,25 +699,42 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       syncUsersWithServer().then(() => refreshData());
+      fetchOnlineUsersFromServer().then((list) => {
+        if (list) setOnlineUsersList(list);
+      });
       refreshData();
       const handleUserUpdate = () => refreshData();
+      const handleOnlineUsersUpdate = (e: Event) => {
+        const customEvent = e as CustomEvent<OnlineUserInfo[]>;
+        if (Array.isArray(customEvent.detail)) {
+          setOnlineUsersList(customEvent.detail);
+        }
+      };
       window.addEventListener('gameland_users_updated', handleUserUpdate);
+      window.addEventListener('gameland_online_users_list_update', handleOnlineUsersUpdate);
 
-      // Auto-poll the server every 3.5 seconds to guarantee all newly registered users appear live
+      // Auto-poll the server every 3.5 seconds to guarantee all newly registered and online users appear live
       const pollInterval = setInterval(() => {
         syncUsersWithServer().then(() => refreshData());
+        fetchOnlineUsersFromServer().then((list) => {
+          if (list) setOnlineUsersList(list);
+        });
       }, 3500);
 
       return () => {
         window.removeEventListener('gameland_users_updated', handleUserUpdate);
+        window.removeEventListener('gameland_online_users_list_update', handleOnlineUsersUpdate);
         clearInterval(pollInterval);
       };
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen && activeTab === 'users') {
+    if (isOpen && (activeTab === 'users' || activeTab === 'overview')) {
       syncUsersWithServer().then(() => refreshData());
+      fetchOnlineUsersFromServer().then((list) => {
+        if (list) setOnlineUsersList(list);
+      });
     }
   }, [isOpen, activeTab]);
 
@@ -800,9 +858,9 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
     setTimeout(() => setUserMsg(''), 3000);
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = registerAccount(newUsername, newUserPassword, newName, newEmail);
+    const res = await registerAccountAsync(newUsername, newUserPassword, newName, newEmail, false);
     if (res.success) {
       setUserMsg(`Created user account ${newUsername}`);
       setNewUsername('');
@@ -834,6 +892,20 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
   };
 
   const totalPlaysAllGames = allGamesList.reduce((acc, g) => acc + (g.playCount || 0), 0);
+
+  const onlineUsersByKey = new Map<string, OnlineUserInfo>();
+  onlineUsersList.forEach((u) => {
+    onlineUsersByKey.set((u.key || u.username).toLowerCase(), u);
+  });
+
+  const formatOnlineDuration = (connectedAt: string) => {
+    const ms = Math.max(0, Date.now() - new Date(connectedAt).getTime());
+    const mins = Math.floor(ms / 60000);
+    if (mins < 1) return 'Just joined';
+    if (mins < 60) return `${mins}m online`;
+    const hrs = Math.floor(mins / 60);
+    return `${hrs}h ${mins % 60}m online`;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -1068,8 +1140,9 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                     <Users className="w-4 h-4 text-emerald-400" />
                   </div>
                   <div className="text-2xl font-black text-white">{usersList.length}</div>
-                  <div className="text-[11px] text-slate-500 mt-1">
-                    {usersList.filter((u) => u.isAdmin).length} admin account(s)
+                  <div className="text-[11px] text-emerald-400 font-semibold mt-1 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>{onlineUsersList.length} signed-in online now</span>
                   </div>
                 </div>
 
@@ -1086,6 +1159,111 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                     <span>System Online</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Online Users Live Monitor */}
+              <div className="p-5 rounded-2xl bg-slate-900 border border-emerald-500/30 space-y-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <Radio className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-extrabold text-white">
+                          Online Users Live
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-black">
+                          {onlineUsersList.length} ONLINE
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        Signed-in accounts currently connected and what they are playing right now.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        fetchOnlineUsersFromServer().then((list) => {
+                          if (list) setOnlineUsersList(list);
+                        });
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Refresh</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserStatusFilter('online');
+                        setActiveTab('users');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all"
+                    >
+                      View in Users Tab
+                    </button>
+                  </div>
+                </div>
+
+                {onlineUsersList.length === 0 ? (
+                  <div className="p-6 rounded-xl bg-slate-950/70 border border-slate-800 text-center text-xs text-slate-400">
+                    No signed-in user sockets detected right now. Online users appear automatically as soon as they sign in.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto pr-1">
+                    {onlineUsersList.map((onlineUser) => (
+                      <div
+                        key={onlineUser.key}
+                        className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-emerald-500/40 transition-colors flex items-start justify-between gap-2.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                            <span className="font-extrabold text-white text-xs truncate">
+                              {onlineUser.username}
+                            </span>
+                            {onlineUser.isAdmin && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black uppercase shrink-0">
+                                Admin
+                              </span>
+                            )}
+                            {onlineUser.isVip && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 font-black uppercase shrink-0">
+                                {onlineUser.vipLevel || 'VIP'}
+                              </span>
+                            )}
+                          </div>
+                          {onlineUser.name && (
+                            <div className="text-[11px] text-slate-400 truncate pl-3.5">
+                              {onlineUser.name}
+                            </div>
+                          )}
+                          <div className="mt-1.5 pl-3.5 flex items-center gap-1.5 text-[11px]">
+                            <Gamepad2 className={`w-3.5 h-3.5 shrink-0 ${onlineUser.currentGame ? 'text-cyan-400' : 'text-slate-500'}`} />
+                            <span className={`truncate font-semibold ${onlineUser.currentGame ? 'text-cyan-300' : 'text-slate-400'}`}>
+                              {onlineUser.currentGame ? `Playing ${onlineUser.currentGame}` : 'In Lobby'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0 space-y-1">
+                          <div className="text-[10px] text-emerald-400 font-semibold whitespace-nowrap">
+                            {formatOnlineDuration(onlineUser.connectedAt)}
+                          </div>
+                          {onlineUser.connections > 1 && (
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              {onlineUser.connections} tabs
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Site Announcement Broadcast Section */}
@@ -2655,14 +2833,15 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setUserStatusFilter('active')}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                    userStatusFilter === 'active'
+                  onClick={() => setUserStatusFilter('online')}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    userStatusFilter === 'online'
                       ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                      : 'bg-slate-900 text-emerald-300 hover:text-white border border-emerald-500/30'
                   }`}
                 >
-                  Active ({usersList.length})
+                  <span className={`w-2 h-2 rounded-full ${userStatusFilter === 'online' ? 'bg-slate-950' : 'bg-emerald-400 animate-pulse'}`}></span>
+                  <span>Online Now ({onlineUsersList.length})</span>
                 </button>
                 <button
                   type="button"
@@ -2781,6 +2960,7 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                         <th className="py-3 px-4">Role</th>
                         <th className="py-3 px-4">VIP Status</th>
                         <th className="py-3 px-4">Created Date</th>
+                        <th className="py-3 px-4">Live Status</th>
                         <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -2788,6 +2968,7 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                       {usersList
                         .filter((u) => {
                           if (userStatusFilter === 'vip' && !u.isVip) return false;
+                          if (userStatusFilter === 'online' && !onlineUsersByKey.has(u.username.toLowerCase())) return false;
                           if (!userSearch) return true;
                           const s = userSearch.toLowerCase();
                           return (
@@ -2799,10 +2980,17 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                         .map((user) => {
                           const isPrimaryAdmin =
                             user.username.toLowerCase() === 'pebblesthepenguinishaany83';
+                          const onlineInfo = onlineUsersByKey.get(user.username.toLowerCase());
                           return (
-                            <tr key={user.username} className="hover:bg-slate-800/40 transition-colors">
+                            <tr key={user.username} className={`hover:bg-slate-800/40 transition-colors ${onlineInfo ? 'bg-emerald-950/15' : ''}`}>
                               <td className="py-3 px-4">
                                 <div className="font-extrabold text-white flex items-center gap-2">
+                                  <span
+                                    className={`w-2 h-2 rounded-full shrink-0 ${
+                                      onlineInfo ? 'bg-emerald-400 animate-pulse' : 'bg-slate-700'
+                                    }`}
+                                    title={onlineInfo ? 'Currently Online' : 'Offline'}
+                                  ></span>
                                   <span>{user.username}</span>
                                   {isPrimaryAdmin && (
                                     <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase font-black">
@@ -2896,11 +3084,33 @@ export const AdminControlModal: React.FC<AdminControlModalProps> = ({
                                 {new Date(user.createdAt).toLocaleDateString()}
                               </td>
 
-                              <td className="py-3 px-4 text-slate-400 text-[11px]">
-                                {new Date(user.lastLogin).toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
+                              <td className="py-3 px-4 text-[11px]">
+                                {onlineInfo ? (
+                                  <div className="space-y-0.5">
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                      <span>Online</span>
+                                      {onlineInfo.connections > 1 && (
+                                        <span className="text-emerald-200/80 font-mono">({onlineInfo.connections})</span>
+                                      )}
+                                    </div>
+                                    <div className="text-[10px] text-cyan-300 truncate max-w-[140px]">
+                                      {onlineInfo.currentGame ? `Playing ${onlineInfo.currentGame}` : 'In Lobby'}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-0.5">
+                                    <span className="text-slate-500 text-[10px] font-semibold">Offline</span>
+                                    <div className="text-slate-500 text-[10px]">
+                                      {user.lastLogin
+                                        ? new Date(user.lastLogin).toLocaleTimeString([], {
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })
+                                        : '—'}
+                                    </div>
+                                  </div>
+                                )}
                               </td>
 
                               <td className="py-3 px-4 text-right">
